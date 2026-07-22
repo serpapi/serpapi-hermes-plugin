@@ -21,16 +21,19 @@ Install serpapi-hermes-plugin into the same Python environment that runs this
 Hermes Agent. If this is a standard Hermes installation, run:
 
 cd ~/.hermes/hermes-agent
-uv pip install serpapi-hermes-plugin
+uv pip install --python venv/bin/python serpapi-hermes-plugin
 
 Otherwise, use the active Hermes Python environment to run:
 
-pip install serpapi-hermes-plugin
+uv pip install --python /path/to/hermes/python serpapi-hermes-plugin
 
 Request my approval for install or terminal commands whenever required; do not
 bypass approvals. After the package is installed, run:
 
 hermes plugins enable serpapi
+
+If Hermes asks whether to allow this plugin to replace built-in tools, answer
+no; serpapi-hermes-plugin does not need tool-override access.
 
 Then ask me for my SerpApi Private API Key, which I can copy from the SerpApi
 dashboard. Do not ask for the key until installation and enablement succeed.
@@ -47,19 +50,28 @@ You need a working
 [Hermes Agent installation](https://hermes-agent.nousresearch.com/docs/getting-started/quickstart/)
 and a SerpApi account.
 
-Install the plugin from PyPI in the same Python environment as Hermes:
-
-```bash
-pip install serpapi-hermes-plugin
-```
-
-If you installed Hermes with its standard installer, install the package from
-the Hermes checkout so it reaches the correct environment:
+Install the plugin from PyPI in the same Python environment as Hermes. If you
+installed Hermes with its standard installer, use its `venv` interpreter
+explicitly:
 
 ```bash
 cd ~/.hermes/hermes-agent
-uv pip install serpapi-hermes-plugin
+uv pip install --python venv/bin/python serpapi-hermes-plugin
 ```
+
+The explicit `--python` is important: the standard Hermes installer creates a
+directory named `venv`, while bare `uv pip install` automatically looks for a
+directory named `.venv`.
+
+For a custom Hermes installation, point uv at the Python interpreter that runs
+Hermes:
+
+```bash
+uv pip install --python /path/to/hermes/python serpapi-hermes-plugin
+```
+
+If that environment already has pip and is activated, the equivalent command
+is `python -m pip install serpapi-hermes-plugin`.
 
 Restart any running Hermes session after installation.
 
@@ -81,13 +93,17 @@ Enable the installed plugin:
 hermes plugins enable serpapi
 ```
 
+If prompted about permission to replace built-in tools, answer **no**. This
+plugin adds new tools and a web-search provider; it does not replace built-in
+tool handlers.
+
 Open Hermes's interactive tool configuration:
 
 ```bash
 hermes tools
 ```
 
-In the **Web Search** section:
+In the **Web Search & Extract** section:
 
 1. Select **SerpApi**.
 2. Paste the Private API Key copied from your SerpApi dashboard.

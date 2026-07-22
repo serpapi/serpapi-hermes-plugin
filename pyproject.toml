@@ -1,0 +1,62 @@
+[build-system]
+requires = ["setuptools>=77,<83"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "serpapi-hermes-plugin"
+version = "0.1.0"
+description = "SerpApi search plugin for Hermes Agent: web, Maps, News, and Shopping"
+readme = "README.md"
+requires-python = ">=3.11,<3.15"
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [{ name = "SerpApi" }]
+keywords = ["hermes-agent", "plugin", "serpapi", "web-search", "maps", "news", "shopping"]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Environment :: Plugins",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Programming Language :: Python :: 3.14",
+  "Topic :: Internet :: WWW/HTTP :: Indexing/Search",
+]
+dependencies = [
+  "httpx>=0.28.1,<1",
+]
+
+[project.entry-points."hermes_agent.plugins"]
+serpapi = "serpapi_hermes_plugin"
+
+[project.urls]
+Homepage = "https://github.com/serpapi/serpapi-hermes-plugin"
+Repository = "https://github.com/serpapi/serpapi-hermes-plugin"
+Issues = "https://github.com/serpapi/serpapi-hermes-plugin/issues"
+
+[dependency-groups]
+dev = [
+  "pytest>=8.3,<10",
+  "ruff>=0.12,<1",
+  "twine>=6.1,<7",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+serpapi_hermes_plugin = ["plugin.yaml", "py.typed"]
+
+[tool.pytest.ini_options]
+addopts = "-q"
+testpaths = ["tests"]
+markers = [
+  "live: makes real SerpApi requests and requires SERPAPI_API_KEY",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["B", "E", "F", "I", "UP"]

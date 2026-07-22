@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "serpapi-hermes-plugin"
-version = "0.1.0"
+version = "0.1.1"
 description = "SerpApi search plugin for Hermes Agent: web, Maps, News, and Shopping"
 readme = "README.md"
 requires-python = ">=3.11,<3.15"

@@ -53,7 +53,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     env:
-      SERPAPI_API_KEY: ${{ secrets.SERPAPI_API_KEY }}
+      SERPAPI_API_KEY: ${{ secrets.SERPAPI_API_KEY || secrets.SERPAPI_KEY }}
+      SERPAPI_KEY: ${{ secrets.SERPAPI_KEY || secrets.SERPAPI_API_KEY }}
 
     steps:
       - name: Check out the pull request
@@ -72,8 +73,8 @@ jobs:
       - name: Require the SerpApi repository secret
         shell: bash
         run: |
-          if [[ -z "${SERPAPI_API_KEY}" ]]; then
-            echo "Add SERPAPI_API_KEY as a GitHub Actions repository secret." >&2
+          if [[ -z "${SERPAPI_API_KEY}" && -z "${SERPAPI_KEY}" ]]; then
+            echo "Add SERPAPI_API_KEY or SERPAPI_KEY as a GitHub Actions repository secret." >&2
             exit 1
           fi
 

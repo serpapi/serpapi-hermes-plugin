@@ -36,6 +36,40 @@ jobs:
       - name: Test
         run: uv run pytest
 
+  live:
+    name: Live SerpApi integration
+    needs: test
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      SERPAPI_API_KEY: ${{ secrets.SERPAPI_API_KEY || secrets.SERPAPI_KEY }}
+      SERPAPI_KEY: ${{ secrets.SERPAPI_KEY || secrets.SERPAPI_API_KEY }}
+
+    steps:
+      - name: Check out the released revision
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+
+      - name: Install uv and Python 3.14
+        uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8.1.0
+        with:
+          version: "0.11.30"
+          python-version: "3.14"
+          enable-cache: true
+
+      - name: Install locked dependencies
+        run: uv sync --locked --dev
+
+      - name: Require the SerpApi repository secret
+        shell: bash
+        run: |
+          if [[ -z "${SERPAPI_API_KEY}" && -z "${SERPAPI_KEY}" ]]; then
+            echo "Add SERPAPI_API_KEY or SERPAPI_KEY as a GitHub Actions repository secret." >&2
+            exit 1
+          fi
+
+      - name: Test real web, Maps, News, and Shopping responses
+        run: uv run pytest -m live
+
   build:
     name: Build release distributions
     needs: test
@@ -108,7 +142,7 @@ jobs:
 
   publish:
     name: Publish to PyPI
-    needs: verify-distributions
+    needs: [verify-distributions, live]
     runs-on: ubuntu-latest
     environment:
       name: pypi

@@ -1,5 +1,10 @@
 # SerpApi for Hermes Agent
 
+[![PyPI version](https://img.shields.io/pypi/v/serpapi-hermes-plugin.svg)](https://pypi.org/project/serpapi-hermes-plugin/)
+[![CI](https://github.com/serpapi/serpapi-hermes-plugin/actions/workflows/ci.yml/badge.svg)](https://github.com/serpapi/serpapi-hermes-plugin/actions/workflows/ci.yml)
+[![Python versions](https://img.shields.io/pypi/pyversions/serpapi-hermes-plugin.svg)](https://pypi.org/project/serpapi-hermes-plugin/)
+[![License: MIT](https://img.shields.io/pypi/l/serpapi-hermes-plugin.svg)](https://github.com/serpapi/serpapi-hermes-plugin/blob/main/LICENSE)
+
 Give [Hermes Agent](https://hermes-agent.nousresearch.com/) fast, fresh search
 results from the web, Google Maps, Google News, and Google Shopping with
 [SerpApi](https://serpapi.com/).
@@ -156,9 +161,9 @@ Example prompts:
 
 ## Contributing
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for development setup, tests, pull request
-guidelines, and the release process.
+See [CONTRIBUTING.md](https://github.com/serpapi/serpapi-hermes-plugin/blob/main/CONTRIBUTING.md)
+for development setup, tests, pull request guidelines, and the release process.
 
 ## License
 
-[MIT](LICENSE)
+[MIT](https://github.com/serpapi/serpapi-hermes-plugin/blob/main/LICENSE)

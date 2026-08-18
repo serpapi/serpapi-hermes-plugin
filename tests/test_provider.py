@@ -9,7 +9,7 @@ import pytest
 
 
 def _response(status_code: int, payload: Any) -> httpx.Response:
-    request = httpx.Request("GET", "https://serpapi.com/search.json")
+    request = httpx.Request("GET", "https://serpapi.com/search")
     return httpx.Response(status_code, json=payload, request=request)
 
 
@@ -84,7 +84,7 @@ def test_search_maps_google_light_results(provider_module, monkeypatch: pytest.M
             ]
         },
     }
-    assert captured["url"] == "https://serpapi.com/search.json"
+    assert captured["url"] == "https://serpapi.com/search"
     assert captured["params"] == {
         "engine": "google_light",
         "q": "Hermes Agent",
@@ -172,6 +172,9 @@ def test_register_adds_provider_and_specialized_tools(provider_module) -> None:
         "serpapi_maps_search",
         "serpapi_news_search",
         "serpapi_shopping_search",
+        "serpapi_hotels_search",
+        "serpapi_flights_search",
+        "serpapi_travel_explore_search",
     ]
     assert all(tool["toolset"] == "serpapi" for tool in context.tools)
     assert all(tool["requires_env"] == ["SERPAPI_API_KEY"] for tool in context.tools)

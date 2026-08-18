@@ -41,6 +41,12 @@ def provider_module(fake_hermes):
 
 
 @pytest.fixture
+def client_module(fake_hermes):
+    del fake_hermes
+    return importlib.import_module("serpapi_hermes_plugin.client")
+
+
+@pytest.fixture
 def tools_module(fake_hermes):
     del fake_hermes
     return importlib.import_module("serpapi_hermes_plugin.tools")

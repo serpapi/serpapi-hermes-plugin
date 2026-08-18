@@ -1,6 +1,6 @@
 name: serpapi
-version: 0.1.0
-description: "SerpApi search for Hermes Agent: web, Maps, News, and Shopping."
+version: 0.1.1
+description: "SerpApi web, Maps, News, Shopping, Hotels, Flights, and Travel Explore for Hermes Agent."
 author: SerpApi
 kind: backend
 provides_web_providers:
@@ -9,8 +9,11 @@ provides_tools:
   - serpapi_maps_search
   - serpapi_news_search
   - serpapi_shopping_search
+  - serpapi_hotels_search
+  - serpapi_flights_search
+  - serpapi_travel_explore_search
 requires_env:
   - name: SERPAPI_API_KEY
-    description: "API key for SerpApi web search"
+    description: "API key for SerpApi search"
     url: "https://serpapi.com/manage-api-key"
     secret: true

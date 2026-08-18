@@ -67,7 +67,7 @@ jobs:
             exit 1
           fi
 
-      - name: Test real web, Maps, News, and Shopping responses
+      - name: Test real web, Maps, News, Shopping, Hotels, Flights, and Travel Explore responses
         run: uv run pytest -m live
 
   build:

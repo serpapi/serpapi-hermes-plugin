@@ -218,6 +218,16 @@ HOTELS_SEARCH_SCHEMA = {
                 "default": 0,
                 "description": "Number of child guests.",
             },
+            "children_ages": {
+                "type": "array",
+                "items": {"type": "integer", "minimum": 1, "maximum": 17},
+                "minItems": 1,
+                "maxItems": 9,
+                "description": (
+                    "Age of each child, in the same order as the child guests. "
+                    "Required when children is greater than 0."
+                ),
+            },
             "currency": {
                 "type": "string",
                 "description": "Optional three-letter currency code, such as USD or EUR.",
@@ -243,7 +253,7 @@ HOTELS_SEARCH_SCHEMA = {
             "hotel_class": {
                 "type": "integer",
                 "enum": [2, 3, 4, 5],
-                "description": "Optional hotel star class.",
+                "description": "Optional hotel star class. Not available for vacation rentals.",
             },
             "sort": {
                 "type": "string",
@@ -254,7 +264,9 @@ HOTELS_SEARCH_SCHEMA = {
             "vacation_rentals": {
                 "type": "boolean",
                 "default": False,
-                "description": "Search vacation rentals instead of hotels.",
+                "description": (
+                    "Search vacation rentals instead of hotels. Do not combine with hotel_class."
+                ),
             },
             "output": _OUTPUT_PROPERTY,
         },
@@ -322,6 +334,20 @@ FLIGHTS_SEARCH_SCHEMA = {
                 "default": 0,
                 "description": "Number of child passengers.",
             },
+            "infants_in_seat": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9,
+                "default": 0,
+                "description": "Number of infants traveling in their own seats.",
+            },
+            "infants_on_lap": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9,
+                "default": 0,
+                "description": ("Number of lap infants. This cannot exceed the number of adults."),
+            },
             "currency": {
                 "type": "string",
                 "description": "Optional three-letter currency code, such as USD or EUR.",
@@ -365,7 +391,10 @@ FLIGHTS_SEARCH_SCHEMA = {
             },
             "departure_token": {
                 "type": "string",
-                "description": "Token from a selected outbound itinerary for return choices.",
+                "description": (
+                    "Token from a selected outbound itinerary for return choices. Reuse the "
+                    "original round-trip route and dates, including return_date."
+                ),
             },
             "output": _OUTPUT_PROPERTY,
         },
@@ -449,6 +478,20 @@ TRAVEL_EXPLORE_SEARCH_SCHEMA = {
                 "maximum": 9,
                 "default": 0,
                 "description": "Number of child travelers.",
+            },
+            "infants_in_seat": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9,
+                "default": 0,
+                "description": "Number of infants traveling in their own seats.",
+            },
+            "infants_on_lap": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9,
+                "default": 0,
+                "description": ("Number of lap infants. This cannot exceed the number of adults."),
             },
             "currency": {
                 "type": "string",

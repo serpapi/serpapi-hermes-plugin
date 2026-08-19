@@ -302,6 +302,8 @@ def test_hotels_search_routes_agent_friendly_parameters(
             "check_in_date": "2026-10-10",
             "check_out_date": "2026-10-15",
             "adults": 3,
+            "children": 2,
+            "children_ages": [5, 8],
             "currency": "usd",
             "country": "id",
             "sort": "lowest_price",
@@ -316,7 +318,8 @@ def test_hotels_search_routes_agent_friendly_parameters(
             "check_in_date": "2026-10-10",
             "check_out_date": "2026-10-15",
             "adults": 3,
-            "children": 0,
+            "children": 2,
+            "children_ages": "5,8",
             "currency": "USD",
             "hl": None,
             "gl": "id",
@@ -330,7 +333,7 @@ def test_hotels_search_routes_agent_friendly_parameters(
     }
 
 
-def test_flights_search_infers_one_way_and_routes_filters(
+def test_flights_search_routes_round_trip_filters_and_passengers(
     tools_module, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     captured: dict[str, Any] = {}
@@ -347,11 +350,14 @@ def test_flights_search_infers_one_way_and_routes_filters(
             "departure_id": "JFK",
             "arrival_id": "LAX",
             "outbound_date": "2026-10-10",
+            "return_date": "2026-10-17",
+            "infants_on_lap": 1,
             "currency": "USD",
             "country": "us",
             "stops": "nonstop",
             "sort": "price",
             "maximum_price": 500,
+            "departure_token": "return-token",
         }
     )
 
@@ -362,11 +368,13 @@ def test_flights_search_infers_one_way_and_routes_filters(
             "departure_id": "JFK",
             "arrival_id": "LAX",
             "outbound_date": "2026-10-10",
-            "return_date": None,
-            "type": "2",
+            "return_date": "2026-10-17",
+            "type": "1",
             "travel_class": "1",
             "adults": 1,
             "children": 0,
+            "infants_in_seat": 0,
+            "infants_on_lap": 1,
             "currency": "USD",
             "hl": None,
             "gl": "us",
@@ -374,7 +382,7 @@ def test_flights_search_infers_one_way_and_routes_filters(
             "sort_by": "2",
             "max_price": 500,
             "deep_search": None,
-            "departure_token": "",
+            "departure_token": "return-token",
             "output": "md",
         },
     }
@@ -417,6 +425,8 @@ def test_travel_explore_routes_region_discovery(
             "travel_class": "1",
             "adults": 1,
             "children": 0,
+            "infants_in_seat": 0,
+            "infants_on_lap": 0,
             "currency": "EUR",
             "hl": None,
             "gl": None,
@@ -456,6 +466,63 @@ def test_travel_explore_routes_region_discovery(
                 "arrival_area_id": "/m/02j9z",
             },
             "either arrival_id or arrival_area_id",
+        ),
+        (
+            "hotels_search",
+            {
+                "query": "Paris",
+                "check_in_date": "2026-10-10",
+                "check_out_date": "2026-10-12",
+                "children": 1,
+            },
+            "children_ages must contain one age per child",
+        ),
+        (
+            "hotels_search",
+            {
+                "query": "Paris",
+                "check_in_date": "2026-10-10",
+                "check_out_date": "2026-10-12",
+                "vacation_rentals": True,
+                "hotel_class": 4,
+            },
+            "hotel_class cannot be used with vacation_rentals",
+        ),
+        (
+            "flights_search",
+            {
+                "departure_id": "JFK",
+                "arrival_id": "LAX",
+                "outbound_date": "2026-10-10",
+                "adults": 8,
+                "infants_in_seat": 2,
+            },
+            "total number of passengers must not exceed 9",
+        ),
+        (
+            "travel_explore_search",
+            {"departure_id": "JFK", "adults": 9, "children": 1},
+            "total number of passengers must not exceed 9",
+        ),
+        (
+            "flights_search",
+            {
+                "departure_id": "JFK",
+                "arrival_id": "LAX",
+                "outbound_date": "2026-10-10",
+                "infants_on_lap": 2,
+            },
+            "infants_on_lap must not exceed the number of adults",
+        ),
+        (
+            "flights_search",
+            {
+                "departure_id": "JFK",
+                "arrival_id": "LAX",
+                "outbound_date": "2026-10-10",
+                "departure_token": "return-token",
+            },
+            "departure_token requires a round trip with return_date",
         ),
     ],
 )

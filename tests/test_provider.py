@@ -179,6 +179,18 @@ def test_register_adds_provider_and_specialized_tools(provider_module) -> None:
     assert all(tool["toolset"] == "serpapi" for tool in context.tools)
     assert all(tool["requires_env"] == ["SERPAPI_API_KEY"] for tool in context.tools)
 
+    tools_by_name = {tool["name"]: tool for tool in context.tools}
+    hotel_properties = tools_by_name["serpapi_hotels_search"]["schema"]["parameters"]["properties"]
+    assert hotel_properties["children_ages"]["items"] == {
+        "type": "integer",
+        "minimum": 1,
+        "maximum": 17,
+    }
+
+    for tool_name in ("serpapi_flights_search", "serpapi_travel_explore_search"):
+        properties = tools_by_name[tool_name]["schema"]["parameters"]["properties"]
+        assert {"infants_in_seat", "infants_on_lap"} <= properties.keys()
+
 
 def test_package_declares_hermes_entry_point(provider_module) -> None:
     entry_points = importlib.metadata.entry_points().select(group="hermes_agent.plugins")

@@ -137,6 +137,8 @@ def test_live_hotels_search_returns_markdown_properties(tools_module) -> None:
             "query": "Bali resorts",
             "check_in_date": check_in.isoformat(),
             "check_out_date": (check_in + timedelta(days=2)).isoformat(),
+            "children": 1,
+            "children_ages": [5],
             "country": "id",
             "currency": "USD",
         }
@@ -154,6 +156,7 @@ def test_live_flights_search_returns_markdown_itineraries(tools_module) -> None:
             "arrival_id": "LAX",
             "outbound_date": outbound.isoformat(),
             "return_date": (outbound + timedelta(days=7)).isoformat(),
+            "infants_on_lap": 1,
             "country": "us",
             "currency": "USD",
         }

@@ -92,9 +92,15 @@ def _travel_id(args: dict[str, Any], name: str, *, required: bool = False) -> st
     return ",".join(identifiers)
 
 
-def _passengers(args: dict[str, Any], *, adults_default: int = 1) -> dict[str, int]:
+def _passengers(
+    args: dict[str, Any], *, adults_default: int = 1, include_infants: bool = False
+) -> dict[str, int]:
     values: dict[str, int] = {}
-    for name, default in (("adults", adults_default), ("children", 0)):
+    passenger_fields = [("adults", adults_default), ("children", 0)]
+    if include_infants:
+        passenger_fields.extend((("infants_in_seat", 0), ("infants_on_lap", 0)))
+
+    for name, default in passenger_fields:
         raw_value = args.get(name)
         if raw_value is None:
             values[name] = default
@@ -104,7 +110,40 @@ def _passengers(args: dict[str, Any], *, adults_default: int = 1) -> dict[str, i
         if value < minimum or value > 9:
             raise ValueError(f"{name} must be between {minimum} and 9")
         values[name] = value
+
+    if include_infants:
+        if sum(values.values()) > 9:
+            raise ValueError("total number of passengers must not exceed 9")
+        if values["infants_on_lap"] > values["adults"]:
+            raise ValueError("infants_on_lap must not exceed the number of adults")
+
     return values
+
+
+def _children_ages(args: dict[str, Any], children: int) -> str | None:
+    raw_ages = args.get("children_ages")
+    if raw_ages is None:
+        if children:
+            raise ValueError("children_ages must contain one age per child")
+        return None
+    if not isinstance(raw_ages, list):
+        raise ValueError("children_ages must be an array of ages")
+    if len(raw_ages) != children:
+        raise ValueError("children_ages must contain one age per child")
+
+    ages: list[int] = []
+    for raw_age in raw_ages:
+        if isinstance(raw_age, bool):
+            raise ValueError("children_ages must contain ages from 1 to 17")
+        try:
+            age = int(raw_age)
+        except (TypeError, ValueError):
+            raise ValueError("children_ages must contain ages from 1 to 17") from None
+        if age < 1 or age > 17:
+            raise ValueError("children_ages must contain ages from 1 to 17")
+        ages.append(age)
+
+    return ",".join(str(age) for age in ages) or None
 
 
 def _optional_fields(item: dict[str, Any], names: tuple[str, ...]) -> dict[str, Any]:
@@ -374,6 +413,13 @@ def hotels_search(args: dict[str, Any], **kwargs: Any) -> str:
         ):
             return _error("minimum_price must not exceed maximum_price")
 
+        vacation_rentals = bool(args.get("vacation_rentals"))
+        if vacation_rentals and args.get("hotel_class") is not None:
+            return _error("hotel_class cannot be used with vacation_rentals")
+
+        passengers = _passengers(args, adults_default=2)
+        children_ages = _children_ages(args, passengers["children"])
+
         sort_by = {
             "lowest_price": "3",
             "highest_rating": "8",
@@ -385,7 +431,8 @@ def hotels_search(args: dict[str, Any], **kwargs: Any) -> str:
                 "q": query,
                 "check_in_date": check_in_date,
                 "check_out_date": check_out_date,
-                **_passengers(args, adults_default=2),
+                **passengers,
+                "children_ages": children_ages,
                 "currency": _currency(args),
                 "hl": _code(args, "language"),
                 "gl": _code(args, "country"),
@@ -393,7 +440,7 @@ def hotels_search(args: dict[str, Any], **kwargs: Any) -> str:
                 "max_price": maximum_price,
                 "sort_by": sort_by,
                 "hotel_class": args.get("hotel_class"),
-                "vacation_rentals": "true" if args.get("vacation_rentals") else None,
+                "vacation_rentals": "true" if vacation_rentals else None,
                 "output": output,
             },
         )
@@ -414,6 +461,7 @@ def flights_search(args: dict[str, Any], **kwargs: Any) -> str:
         arrival_id = _travel_id(args, "arrival_id", required=True)
         outbound_date = _date(args, "outbound_date", required=True)
         return_date = _date(args, "return_date")
+        departure_token = str(args.get("departure_token") or "").strip()
 
         trip_type = str(args.get("trip_type") or "").strip()
         if not trip_type:
@@ -424,6 +472,8 @@ def flights_search(args: dict[str, Any], **kwargs: Any) -> str:
             return _error("return_date is required for a round trip")
         if trip_type == "one_way" and return_date:
             return _error("return_date cannot be used for a one-way trip")
+        if departure_token and (trip_type != "round_trip" or not return_date):
+            return _error("departure_token requires a round trip with return_date")
         if return_date and date.fromisoformat(return_date) < date.fromisoformat(outbound_date):
             return _error("return_date must not be before outbound_date")
 
@@ -460,7 +510,7 @@ def flights_search(args: dict[str, Any], **kwargs: Any) -> str:
                 "return_date": return_date,
                 "type": "1" if trip_type == "round_trip" else "2",
                 "travel_class": travel_class,
-                **_passengers(args),
+                **_passengers(args, include_infants=True),
                 "currency": _currency(args),
                 "hl": _code(args, "language"),
                 "gl": _code(args, "country"),
@@ -468,7 +518,7 @@ def flights_search(args: dict[str, Any], **kwargs: Any) -> str:
                 "sort_by": sort_by,
                 "max_price": maximum_price,
                 "deep_search": "true" if args.get("deep_search") else None,
-                "departure_token": str(args.get("departure_token") or "").strip(),
+                "departure_token": departure_token,
                 "output": output,
             },
         )
@@ -549,7 +599,7 @@ def travel_explore_search(args: dict[str, Any], **kwargs: Any) -> str:
                 "month": int(month) if month is not None else None,
                 "travel_duration": travel_duration if not outbound_date else None,
                 "travel_class": travel_class,
-                **_passengers(args),
+                **_passengers(args, include_infants=True),
                 "currency": _currency(args),
                 "hl": _code(args, "language"),
                 "gl": _code(args, "country"),

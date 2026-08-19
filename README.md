@@ -5,15 +5,13 @@
 [![Python versions](https://img.shields.io/pypi/pyversions/serpapi-hermes-plugin.svg)](https://pypi.org/project/serpapi-hermes-plugin/)
 [![License: MIT](https://img.shields.io/pypi/l/serpapi-hermes-plugin.svg)](https://github.com/serpapi/serpapi-hermes-plugin/blob/main/LICENSE)
 
-Give [Hermes Agent](https://hermes-agent.nousresearch.com/) fast, fresh search
-results from the web, Google Maps, Google News, and Google Shopping with
-[SerpApi](https://serpapi.com/).
+Give [Hermes Agent](https://hermes-agent.nousresearch.com/) fresh web, local, news, shopping, hotel, flight, and destination results with [SerpApi](https://serpapi.com/).
 
 The plugin adds SerpApi to Hermes in two ways:
 
 - Hermes's built-in `web_search` uses the fast Google Light engine.
-- Dedicated Maps, News, and Shopping tools let Hermes choose the right SerpApi
-  engine for local places, current reporting, and product searches.
+- Dedicated Maps, News, Shopping, Hotels, Flights, and Travel Explore tools let Hermes choose the right SerpApi engine for each request.
+- Direct SerpApi tools return token-efficient Markdown by default, including tables, links, and YAML frontmatter designed for agents.
 
 ## Ask Hermes to install it
 
@@ -45,8 +43,8 @@ dashboard. Do not ask for the key until installation and enablement succeed.
 After I provide it, save it as SERPAPI_API_KEY in ~/.hermes/.env without
 printing, logging, or committing it. Configure SerpApi as the Hermes web search
 backend, tell me whether Hermes must be restarted, and verify that web search,
-Maps, News, and Shopping tools are available. Use this key for future SerpApi
-searches and never expose it in output.
+Maps, News, Shopping, Hotels, Flights, and Travel Explore tools are available.
+Use this key for future SerpApi searches and never expose it in output.
 ```
 
 ## Install
@@ -142,15 +140,21 @@ The environment variable takes precedence over the value in `~/.hermes/.env`.
 
 ## Search capabilities
 
+Hermes's built-in `web_search` contract requires structured web records, so the plugin requests JSON for that provider and converts it to Hermes's standard response. The six directly registered SerpApi tools request [`output=md`](https://serpapi.com/search-api#api-parameters-output) by default and return SerpApi's Markdown without reparsing it. This preserves result tables and links while using fewer tokens than full JSON.
+
+Each direct tool also accepts `output: "json"` when the agent needs structured fields such as a Google Flights `departure_token`. Markdown remains the schema default.
+
 | What you ask for | Hermes tool | SerpApi engine |
 |---|---|---|
 | General web research | `web_search` | `google_light` |
 | Places and local businesses | `serpapi_maps_search` | `google_maps` |
 | Current and recent news | `serpapi_news_search` | `google_news_light` |
 | Products, prices, and merchants | `serpapi_shopping_search` | `google_shopping_light` |
+| Hotels and vacation rentals | `serpapi_hotels_search` | [`google_hotels`](https://serpapi.com/google-hotels-api) |
+| Fixed-route flight fares | `serpapi_flights_search` | [`google_flights`](https://serpapi.com/google-flights-api) |
+| Flexible destinations and dates | `serpapi_travel_explore_search` | [`google_travel_explore`](https://serpapi.com/google-travel-explore-api) |
 
-Hermes chooses a tool from your request. Each tool selects and validates its own
-SerpApi engine, so you do not need to specify an engine name.
+Hermes chooses a tool from your request. Each tool selects and validates its own SerpApi engine, so you do not need to specify an engine name. Flight and Travel Explore location fields accept individual uppercase airport codes such as `LHR`, `CDG`, or `AUS`, as well as `/m/` or `/g/` location KGMIDs. Use Travel Explore when the traveler has a city or region in mind but no exact airport.
 
 Example prompts:
 
@@ -158,6 +162,11 @@ Example prompts:
 - "Find highly rated coffee shops near Times Square."
 - "Show me recent news about reusable rockets."
 - "Find well-reviewed laptops under $1,200 with free shipping."
+- "Find four-star hotels in Kyoto for October 10 to October 15."
+- "Compare nonstop business-class flights from JFK to LAX next month."
+- "Where can I go from Bengaluru for a one-week beach trip in December?"
+
+Google Flights returns outbound choices first for round trips. To inspect return-flight choices, call `serpapi_flights_search` with `output: "json"`, select a `departure_token`, then call the tool again with that token and the same route and dates.
 
 ## Contributing
 

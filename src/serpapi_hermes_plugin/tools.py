@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 import json
+from datetime import date
 from typing import Any
 
 from .client import SerpApiError, call_serpapi
+from .markdown import limit_result_table
 
 _MAX_RESULTS = 20
 
@@ -20,6 +22,13 @@ def _error(message: str) -> str:
 
 def _query(args: dict[str, Any]) -> str:
     return str(args.get("query") or "").strip()
+
+
+def _output(args: dict[str, Any]) -> str:
+    output = str(args.get("output") or "md").strip().lower()
+    if output not in {"md", "json"}:
+        raise ValueError("output must be 'md' or 'json'")
+    return output
 
 
 def _limit(args: dict[str, Any]) -> int:
@@ -38,6 +47,105 @@ def _code(args: dict[str, Any], name: str) -> str | None:
     return value
 
 
+def _currency(args: dict[str, Any]) -> str | None:
+    value = str(args.get("currency") or "").strip().upper()
+    if not value:
+        return None
+    if len(value) != 3 or not value.isalpha():
+        raise ValueError("currency must be a three-letter code")
+    return value
+
+
+def _date(args: dict[str, Any], name: str, *, required: bool = False) -> str | None:
+    value = str(args.get(name) or "").strip()
+    if not value:
+        if required:
+            raise ValueError(f"{name} is required")
+        return None
+    try:
+        parsed = date.fromisoformat(value)
+    except ValueError:
+        raise ValueError(f"{name} must use YYYY-MM-DD") from None
+    if parsed.isoformat() != value:
+        raise ValueError(f"{name} must use YYYY-MM-DD")
+    return value
+
+
+def _travel_id(args: dict[str, Any], name: str, *, required: bool = False) -> str | None:
+    value = str(args.get(name) or "").strip()
+    if not value:
+        if required:
+            raise ValueError(f"{name} is required")
+        return None
+    identifiers = [identifier.strip() for identifier in value.split(",")]
+    if any(
+        not identifier
+        or not (
+            (len(identifier) == 3 and identifier.isalpha() and identifier.isupper())
+            or identifier.startswith(("/m/", "/g/"))
+        )
+        for identifier in identifiers
+    ):
+        raise ValueError(
+            f"{name} must contain uppercase three-letter airport codes or /m/ or /g/ KGMIDs"
+        )
+    return ",".join(identifiers)
+
+
+def _passengers(
+    args: dict[str, Any], *, adults_default: int = 1, include_infants: bool = False
+) -> dict[str, int]:
+    values: dict[str, int] = {}
+    passenger_fields = [("adults", adults_default), ("children", 0)]
+    if include_infants:
+        passenger_fields.extend((("infants_in_seat", 0), ("infants_on_lap", 0)))
+
+    for name, default in passenger_fields:
+        raw_value = args.get(name)
+        if raw_value is None:
+            values[name] = default
+            continue
+        value = int(raw_value)
+        minimum = 1 if name == "adults" else 0
+        if value < minimum or value > 9:
+            raise ValueError(f"{name} must be between {minimum} and 9")
+        values[name] = value
+
+    if include_infants:
+        if sum(values.values()) > 9:
+            raise ValueError("total number of passengers must not exceed 9")
+        if values["infants_on_lap"] > values["adults"]:
+            raise ValueError("infants_on_lap must not exceed the number of adults")
+
+    return values
+
+
+def _children_ages(args: dict[str, Any], children: int) -> str | None:
+    raw_ages = args.get("children_ages")
+    if raw_ages is None:
+        if children:
+            raise ValueError("children_ages must contain one age per child")
+        return None
+    if not isinstance(raw_ages, list):
+        raise ValueError("children_ages must be an array of ages")
+    if len(raw_ages) != children:
+        raise ValueError("children_ages must contain one age per child")
+
+    ages: list[int] = []
+    for raw_age in raw_ages:
+        if isinstance(raw_age, bool):
+            raise ValueError("children_ages must contain ages from 1 to 17")
+        try:
+            age = int(raw_age)
+        except (TypeError, ValueError):
+            raise ValueError("children_ages must contain ages from 1 to 17") from None
+        if age < 1 or age > 17:
+            raise ValueError("children_ages must contain ages from 1 to 17")
+        ages.append(age)
+
+    return ",".join(str(age) for age in ages) or None
+
+
 def _optional_fields(item: dict[str, Any], names: tuple[str, ...]) -> dict[str, Any]:
     return {name: item[name] for name in names if item.get(name) not in (None, "", [])}
 
@@ -48,6 +156,11 @@ def maps_search(args: dict[str, Any], **kwargs: Any) -> str:
     query = _query(args)
     if not query:
         return _error("Search query must not be empty")
+
+    try:
+        output = _output(args)
+    except ValueError as exc:
+        return _error(str(exc))
 
     location = str(args.get("location") or "").strip()
     latitude = args.get("latitude")
@@ -64,6 +177,7 @@ def maps_search(args: dict[str, Any], **kwargs: Any) -> str:
             "type": "search",
             "hl": _code(args, "language"),
             "gl": _code(args, "country"),
+            "output": output,
         }
         if location:
             params.update({"location": location, "z": int(args.get("zoom", 14))})
@@ -84,6 +198,9 @@ def maps_search(args: dict[str, Any], **kwargs: Any) -> str:
         return _error(str(exc))
     except SerpApiError as exc:
         return _error(str(exc))
+
+    if isinstance(payload, str):
+        return limit_result_table(payload, heading="Local Results", limit=_limit(args))
 
     results = []
     raw_results = payload.get("local_results", [])
@@ -134,6 +251,7 @@ def news_search(args: dict[str, Any], **kwargs: Any) -> str:
         return _error("Search query must not be empty")
 
     try:
+        output = _output(args)
         payload = call_serpapi(
             "google_news_light",
             {
@@ -141,12 +259,16 @@ def news_search(args: dict[str, Any], **kwargs: Any) -> str:
                 "location": str(args.get("location") or "").strip(),
                 "hl": _code(args, "language"),
                 "gl": _code(args, "country"),
+                "output": output,
             },
         )
     except (TypeError, ValueError) as exc:
         return _error(str(exc))
     except SerpApiError as exc:
         return _error(str(exc))
+
+    if isinstance(payload, str):
+        return limit_result_table(payload, heading="News Results", limit=_limit(args))
 
     results = []
     raw_results = payload.get("news_results", [])
@@ -180,6 +302,11 @@ def shopping_search(args: dict[str, Any], **kwargs: Any) -> str:
     if not query:
         return _error("Search query must not be empty")
 
+    try:
+        output = _output(args)
+    except ValueError as exc:
+        return _error(str(exc))
+
     minimum_price = args.get("minimum_price")
     maximum_price = args.get("maximum_price")
     if minimum_price is not None and maximum_price is not None:
@@ -207,12 +334,16 @@ def shopping_search(args: dict[str, Any], **kwargs: Any) -> str:
                 "sort_by": sort_by,
                 "free_shipping": "true" if args.get("free_shipping") else None,
                 "on_sale": "true" if args.get("on_sale") else None,
+                "output": output,
             },
         )
     except (TypeError, ValueError) as exc:
         return _error(str(exc))
     except SerpApiError as exc:
         return _error(str(exc))
+
+    if isinstance(payload, str):
+        return limit_result_table(payload, heading="Shopping Results", limit=_limit(args))
 
     results = []
     raw_results = payload.get("shopping_results", [])
@@ -253,3 +384,233 @@ def shopping_search(args: dict[str, Any], **kwargs: Any) -> str:
             "results": results,
         }
     )
+
+
+def hotels_search(args: dict[str, Any], **kwargs: Any) -> str:
+    """Search Google Hotels for stays and nightly prices."""
+    del kwargs
+    query = _query(args)
+    if not query:
+        return _error("Search query must not be empty")
+
+    try:
+        output = _output(args)
+        check_in_date = _date(args, "check_in_date", required=True)
+        check_out_date = _date(args, "check_out_date", required=True)
+        if date.fromisoformat(check_out_date) <= date.fromisoformat(check_in_date):
+            return _error("check_out_date must be after check_in_date")
+
+        minimum_price = args.get("minimum_price")
+        maximum_price = args.get("maximum_price")
+        if minimum_price is not None and float(minimum_price) < 0:
+            return _error("minimum_price must be at least 0")
+        if maximum_price is not None and float(maximum_price) < 0:
+            return _error("maximum_price must be at least 0")
+        if (
+            minimum_price is not None
+            and maximum_price is not None
+            and float(minimum_price) > float(maximum_price)
+        ):
+            return _error("minimum_price must not exceed maximum_price")
+
+        vacation_rentals = bool(args.get("vacation_rentals"))
+        if vacation_rentals and args.get("hotel_class") is not None:
+            return _error("hotel_class cannot be used with vacation_rentals")
+
+        passengers = _passengers(args, adults_default=2)
+        children_ages = _children_ages(args, passengers["children"])
+
+        sort_by = {
+            "lowest_price": "3",
+            "highest_rating": "8",
+            "most_reviewed": "13",
+        }.get(str(args.get("sort") or "relevance"))
+        payload = call_serpapi(
+            "google_hotels",
+            {
+                "q": query,
+                "check_in_date": check_in_date,
+                "check_out_date": check_out_date,
+                **passengers,
+                "children_ages": children_ages,
+                "currency": _currency(args),
+                "hl": _code(args, "language"),
+                "gl": _code(args, "country"),
+                "min_price": minimum_price,
+                "max_price": maximum_price,
+                "sort_by": sort_by,
+                "hotel_class": args.get("hotel_class"),
+                "vacation_rentals": "true" if vacation_rentals else None,
+                "output": output,
+            },
+        )
+    except (TypeError, ValueError) as exc:
+        return _error(str(exc))
+    except SerpApiError as exc:
+        return _error(str(exc))
+
+    return payload if isinstance(payload, str) else _json(payload)
+
+
+def flights_search(args: dict[str, Any], **kwargs: Any) -> str:
+    """Search Google Flights for one-way or round-trip itineraries."""
+    del kwargs
+    try:
+        output = _output(args)
+        departure_id = _travel_id(args, "departure_id", required=True)
+        arrival_id = _travel_id(args, "arrival_id", required=True)
+        outbound_date = _date(args, "outbound_date", required=True)
+        return_date = _date(args, "return_date")
+        departure_token = str(args.get("departure_token") or "").strip()
+
+        trip_type = str(args.get("trip_type") or "").strip()
+        if not trip_type:
+            trip_type = "round_trip" if return_date else "one_way"
+        if trip_type not in {"round_trip", "one_way"}:
+            return _error("trip_type must be 'round_trip' or 'one_way'")
+        if trip_type == "round_trip" and not return_date:
+            return _error("return_date is required for a round trip")
+        if trip_type == "one_way" and return_date:
+            return _error("return_date cannot be used for a one-way trip")
+        if departure_token and (trip_type != "round_trip" or not return_date):
+            return _error("departure_token requires a round trip with return_date")
+        if return_date and date.fromisoformat(return_date) < date.fromisoformat(outbound_date):
+            return _error("return_date must not be before outbound_date")
+
+        maximum_price = args.get("maximum_price")
+        if maximum_price is not None and float(maximum_price) < 0:
+            return _error("maximum_price must be at least 0")
+
+        travel_class = {
+            "economy": "1",
+            "premium_economy": "2",
+            "business": "3",
+            "first": "4",
+        }.get(str(args.get("travel_class") or "economy"))
+        sort_by = {
+            "top_flights": "1",
+            "price": "2",
+            "departure_time": "3",
+            "arrival_time": "4",
+            "duration": "5",
+            "emissions": "6",
+        }.get(str(args.get("sort") or "top_flights"))
+        stops = {
+            "any": "0",
+            "nonstop": "1",
+            "one_or_fewer": "2",
+            "two_or_fewer": "3",
+        }.get(str(args.get("stops") or "any"))
+        payload = call_serpapi(
+            "google_flights",
+            {
+                "departure_id": departure_id,
+                "arrival_id": arrival_id,
+                "outbound_date": outbound_date,
+                "return_date": return_date,
+                "type": "1" if trip_type == "round_trip" else "2",
+                "travel_class": travel_class,
+                **_passengers(args, include_infants=True),
+                "currency": _currency(args),
+                "hl": _code(args, "language"),
+                "gl": _code(args, "country"),
+                "stops": stops,
+                "sort_by": sort_by,
+                "max_price": maximum_price,
+                "deep_search": "true" if args.get("deep_search") else None,
+                "departure_token": departure_token,
+                "output": output,
+            },
+        )
+    except (TypeError, ValueError) as exc:
+        return _error(str(exc))
+    except SerpApiError as exc:
+        return _error(str(exc))
+
+    return payload if isinstance(payload, str) else _json(payload)
+
+
+def travel_explore_search(args: dict[str, Any], **kwargs: Any) -> str:
+    """Explore destinations and flexible trip prices with Google Travel Explore."""
+    del kwargs
+    try:
+        output = _output(args)
+        departure_id = _travel_id(args, "departure_id", required=True)
+        arrival_id = _travel_id(args, "arrival_id")
+        arrival_area_id = str(args.get("arrival_area_id") or "").strip() or None
+        if arrival_id and arrival_area_id:
+            return _error("Use either arrival_id or arrival_area_id, not both")
+        if arrival_area_id and not arrival_area_id.startswith(("/m/", "/g/")):
+            return _error("arrival_area_id must be a /m/ or /g/ region or country KGMID")
+
+        outbound_date = _date(args, "outbound_date")
+        return_date = _date(args, "return_date")
+        if return_date and not outbound_date:
+            return _error("outbound_date is required when return_date is provided")
+        if return_date and date.fromisoformat(return_date) < date.fromisoformat(outbound_date):
+            return _error("return_date must not be before outbound_date")
+
+        trip_type = str(args.get("trip_type") or "").strip()
+        if not trip_type:
+            trip_type = "round_trip" if return_date or not outbound_date else "one_way"
+        if trip_type not in {"round_trip", "one_way"}:
+            return _error("trip_type must be 'round_trip' or 'one_way'")
+        if trip_type == "round_trip" and outbound_date and not return_date:
+            return _error("return_date is required for a fixed-date round trip")
+        if trip_type == "one_way" and return_date:
+            return _error("return_date cannot be used for a one-way trip")
+
+        month = args.get("month")
+        if month is not None and not 0 <= int(month) <= 12:
+            return _error("month must be between 0 and 12")
+        if outbound_date and month not in (None, 0, "0"):
+            return _error("Use fixed dates or month, not both")
+
+        maximum_price = args.get("maximum_price")
+        if maximum_price is not None and float(maximum_price) < 0:
+            return _error("maximum_price must be at least 0")
+
+        travel_duration = {
+            "weekend": "1",
+            "one_week": "2",
+            "two_weeks": "3",
+        }.get(str(args.get("travel_duration") or "one_week"))
+        travel_class = {
+            "economy": "1",
+            "premium_economy": "2",
+            "business": "3",
+            "first": "4",
+        }.get(str(args.get("travel_class") or "economy"))
+        stops = {
+            "any": "0",
+            "nonstop": "1",
+            "one_or_fewer": "2",
+            "two_or_fewer": "3",
+        }.get(str(args.get("stops") or "any"))
+        payload = call_serpapi(
+            "google_travel_explore",
+            {
+                "departure_id": departure_id,
+                "arrival_id": arrival_id,
+                "arrival_area_id": arrival_area_id,
+                "outbound_date": outbound_date,
+                "return_date": return_date,
+                "type": "1" if trip_type == "round_trip" else "2",
+                "month": int(month) if month is not None else None,
+                "travel_duration": travel_duration if not outbound_date else None,
+                "travel_class": travel_class,
+                **_passengers(args, include_infants=True),
+                "currency": _currency(args),
+                "hl": _code(args, "language"),
+                "gl": _code(args, "country"),
+                "stops": stops,
+                "max_price": maximum_price,
+                "output": output,
+            },
+        )
+    except (TypeError, ValueError) as exc:
+        return _error(str(exc))
+    except SerpApiError as exc:
+        return _error(str(exc))
+
+    return payload if isinstance(payload, str) else _json(payload)

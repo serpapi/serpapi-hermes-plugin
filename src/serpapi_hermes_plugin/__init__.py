@@ -1,10 +1,24 @@
-"""SerpApi web, Maps, News, and Shopping search for Hermes Agent."""
+"""SerpApi web, Maps, News, Shopping, Hotels, Flights, and Travel Explore for Hermes Agent."""
 
 from __future__ import annotations
 
 from .provider import SerpApiWebSearchProvider
-from .schemas import MAPS_SEARCH_SCHEMA, NEWS_SEARCH_SCHEMA, SHOPPING_SEARCH_SCHEMA
-from .tools import maps_search, news_search, shopping_search
+from .schemas import (
+    FLIGHTS_SEARCH_SCHEMA,
+    HOTELS_SEARCH_SCHEMA,
+    MAPS_SEARCH_SCHEMA,
+    NEWS_SEARCH_SCHEMA,
+    SHOPPING_SEARCH_SCHEMA,
+    TRAVEL_EXPLORE_SEARCH_SCHEMA,
+)
+from .tools import (
+    flights_search,
+    hotels_search,
+    maps_search,
+    news_search,
+    shopping_search,
+    travel_explore_search,
+)
 
 __all__ = ["SerpApiWebSearchProvider", "register"]
 
@@ -18,6 +32,9 @@ def register(ctx) -> None:
         (MAPS_SEARCH_SCHEMA, maps_search),
         (NEWS_SEARCH_SCHEMA, news_search),
         (SHOPPING_SEARCH_SCHEMA, shopping_search),
+        (HOTELS_SEARCH_SCHEMA, hotels_search),
+        (FLIGHTS_SEARCH_SCHEMA, flights_search),
+        (TRAVEL_EXPLORE_SEARCH_SCHEMA, travel_explore_search),
     ):
         ctx.register_tool(
             name=schema["name"],

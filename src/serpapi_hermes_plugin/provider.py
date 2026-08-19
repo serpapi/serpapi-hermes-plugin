@@ -53,6 +53,7 @@ class SerpApiWebSearchProvider(WebSearchProvider):
                 {
                     "q": query,
                     "num": result_limit,
+                    "output": "json",
                 },
             )
         except SerpApiError as exc:

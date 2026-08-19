@@ -36,6 +36,7 @@ classifiers = [
 ]
 dependencies = [
   "httpx>=0.28.1,<1",
+  "markdown-it-py>=4.2,<5",
 ]
 
 [project.entry-points."hermes_agent.plugins"]

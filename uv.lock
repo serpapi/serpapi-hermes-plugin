@@ -580,6 +580,7 @@ version = "0.1.1"
 source = { editable = "." }
 dependencies = [
     { name = "httpx" },
+    { name = "markdown-it-py" },
 ]
 
 [package.dev-dependencies]
@@ -590,7 +591,10 @@ dev = [
 ]
 
 [package.metadata]
-requires-dist = [{ name = "httpx", specifier = ">=0.28.1,<1" }]
+requires-dist = [
+    { name = "httpx", specifier = ">=0.28.1,<1" },
+    { name = "markdown-it-py", specifier = ">=4.2,<5" },
+]
 
 [package.metadata.requires-dev]
 dev = [

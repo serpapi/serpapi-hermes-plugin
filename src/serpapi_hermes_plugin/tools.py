@@ -7,6 +7,7 @@ from datetime import date
 from typing import Any
 
 from .client import SerpApiError, call_serpapi
+from .markdown import limit_result_table
 
 _MAX_RESULTS = 20
 
@@ -160,7 +161,7 @@ def maps_search(args: dict[str, Any], **kwargs: Any) -> str:
         return _error(str(exc))
 
     if isinstance(payload, str):
-        return payload
+        return limit_result_table(payload, heading="Local Results", limit=_limit(args))
 
     results = []
     raw_results = payload.get("local_results", [])
@@ -228,7 +229,7 @@ def news_search(args: dict[str, Any], **kwargs: Any) -> str:
         return _error(str(exc))
 
     if isinstance(payload, str):
-        return payload
+        return limit_result_table(payload, heading="News Results", limit=_limit(args))
 
     results = []
     raw_results = payload.get("news_results", [])
@@ -303,7 +304,7 @@ def shopping_search(args: dict[str, Any], **kwargs: Any) -> str:
         return _error(str(exc))
 
     if isinstance(payload, str):
-        return payload
+        return limit_result_table(payload, heading="Shopping Results", limit=_limit(args))
 
     results = []
     raw_results = payload.get("shopping_results", [])

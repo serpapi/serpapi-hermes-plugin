@@ -240,6 +240,50 @@ def test_existing_direct_tools_return_serpapi_markdown_by_default(
     assert captured["params"]["output"] == "md"
 
 
+@pytest.mark.parametrize(
+    ("handler_name", "heading"),
+    [
+        ("maps_search", "Local Results"),
+        ("news_search", "News Results"),
+        ("shopping_search", "Shopping Results"),
+    ],
+)
+def test_direct_tools_enforce_limit_without_reformatting_markdown(
+    tools_module,
+    monkeypatch: pytest.MonkeyPatch,
+    handler_name: str,
+    heading: str,
+) -> None:
+    result_rows = "".join(
+        f"| {position} | result-{position} | [Open](https://example.com/{position}) |\n"
+        for position in range(1, 6)
+    )
+    markdown = (
+        "---\nengine: test\n---\n\n"
+        f"## {heading} (5)\n\n"
+        "| Position | Title | Link |\n"
+        "| ---: | --- | --- |\n"
+        f"{result_rows}\n"
+        "## Pagination\n\n"
+        "| Next |\n"
+        "| --- |\n"
+        "| [result-99](https://example.com/next) |\n"
+    )
+
+    monkeypatch.setattr(tools_module, "call_serpapi", lambda engine, params: markdown)
+
+    result = getattr(tools_module, handler_name)({"query": "test", "limit": 3})
+
+    assert result.startswith("---\nengine: test\n---\n")
+    assert f"## {heading} (5)" in result
+    assert "| 1 | result-1 |" in result
+    assert "| 3 | result-3 |" in result
+    assert "| 4 | result-4 |" not in result
+    assert "| 5 | result-5 |" not in result
+    assert "## Pagination" in result
+    assert "[result-99](https://example.com/next)" in result
+
+
 def test_hotels_search_routes_agent_friendly_parameters(
     tools_module, monkeypatch: pytest.MonkeyPatch
 ) -> None:

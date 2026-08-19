@@ -37,6 +37,17 @@ def _safe_api_error(value: Any, api_key: str) -> str:
     return message[:500]
 
 
+def _response_api_error(response: httpx.Response, api_key: str) -> str | None:
+    """Read a safe error message from a SerpApi JSON response."""
+    try:
+        payload = response.json()
+    except ValueError:
+        return None
+    if not isinstance(payload, dict) or not payload.get("error"):
+        return None
+    return _safe_api_error(payload["error"], api_key)
+
+
 def _redact_response(value: Any, api_key: str) -> Any:
     """Remove the credential from any response text before returning it to Hermes."""
     if isinstance(value, str):
@@ -84,6 +95,10 @@ def call_serpapi(engine: str, params: Mapping[str, Any]) -> dict[str, Any] | str
             message = "SerpApi quota exhausted; try again later"
         elif status >= 500:
             message = f"SerpApi upstream error (HTTP {status}); try again shortly"
+        elif 400 <= status < 500:
+            message = _response_api_error(exc.response, api_key) or (
+                f"SerpApi request failed (HTTP {status})"
+            )
         else:
             message = f"SerpApi request failed (HTTP {status})"
         raise SerpApiError(message) from None

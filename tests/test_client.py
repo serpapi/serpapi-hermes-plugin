@@ -84,3 +84,40 @@ def test_markdown_api_error_is_safe(client_module, monkeypatch: pytest.MonkeyPat
 
     with pytest.raises(client_module.SerpApiError, match=r"Invalid \[redacted\]"):
         client_module.call_serpapi("google_light", {"q": "coffee"})
+
+
+def test_http_400_returns_safe_api_error(client_module, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("SERPAPI_API_KEY", "secret-key")
+
+    def fake_get(url: str, **kwargs: Any) -> httpx.Response:
+        del kwargs
+        request = httpx.Request("GET", url)
+        return httpx.Response(
+            400,
+            json={"error": "Invalid children_ages for secret-key"},
+            request=request,
+        )
+
+    monkeypatch.setattr(httpx, "get", fake_get)
+
+    with pytest.raises(
+        client_module.SerpApiError,
+        match=r"Invalid children_ages for \[redacted\]",
+    ):
+        client_module.call_serpapi("google_hotels", {"q": "Bali", "output": "md"})
+
+
+def test_http_400_without_json_uses_generic_error(
+    client_module, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("SERPAPI_API_KEY", "secret-key")
+
+    def fake_get(url: str, **kwargs: Any) -> httpx.Response:
+        del kwargs
+        request = httpx.Request("GET", url)
+        return httpx.Response(400, text="Bad request", request=request)
+
+    monkeypatch.setattr(httpx, "get", fake_get)
+
+    with pytest.raises(client_module.SerpApiError, match=r"request failed \(HTTP 400\)"):
+        client_module.call_serpapi("google_hotels", {"q": "Bali", "output": "md"})

@@ -81,7 +81,6 @@ def call_serpapi(engine: str, params: Mapping[str, Any]) -> dict[str, Any] | str
             params=request_params,
             headers={
                 "Accept": "text/markdown" if output == "md" else "application/json",
-                "X-Client-Source": "hermes",
             },
             timeout=TIMEOUT_SECONDS,
         )

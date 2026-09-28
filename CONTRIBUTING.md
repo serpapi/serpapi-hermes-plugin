@@ -81,6 +81,8 @@ The owner, repository, workflow filename, and environment must exactly match
    uv lock
    ```
 
+   Set the same version in the root `plugin.yaml` and `src/serpapi_hermes_plugin/plugin.yaml` so Git and PyPI installations report the same release.
+
 2. Run the same checks used by CI:
 
    ```bash
@@ -110,3 +112,50 @@ new GitHub Release.
 - [PyPI: adding a trusted publisher](https://docs.pypi.org/trusted-publishers/adding-a-publisher/)
 - [PyPI: creating a project with a pending publisher](https://docs.pypi.org/trusted-publishers/creating-a-project-through-oidc/)
 - [PyPI: publishing with a trusted publisher](https://docs.pypi.org/trusted-publishers/using-a-publisher/)
+
+## Git installation and Hermes catalog submission
+
+The repository root is a Hermes directory plugin. Its `__init__.py` loads the implementation from `src/serpapi_hermes_plugin/` using a relative import, and its `pyproject.toml` declares the runtime dependencies for Hermes to install. PyPI continues to use the `hermes_agent.plugins` entry point. Keep both manifests current when changing tools, credentials, or the release version.
+
+With a current Hermes checkout and the plugin's dependencies available, validate the repository before publishing Git-install changes:
+
+```bash
+hermes plugins doctor /path/to/serpapi-hermes-plugin --ci
+hermes plugins validate /path/to/serpapi-hermes-plugin
+```
+
+The [Hermes catalog](https://hermes-agent.nousresearch.com/docs/user-guide/features/plugin-catalog#submitting-a-plugin-to-the-catalog) accepts submissions through reviewed pull requests to `NousResearch/hermes-agent`. Publishing to PyPI or pushing this repository does not create a catalog listing.
+
+1. Publish a release/tag containing the Git entry point and its manifest. Use a new version if the current version has already been released.
+2. Resolve that release to its full 40-character commit SHA. The catalog pin must reference the published commit containing these files; a branch, tag name, or uncommitted checkout cannot be the pin.
+3. As an owner or maintainer of this repository, open a PR against `NousResearch/hermes-agent` adding `plugin-catalog/serpapi.yaml` using the template below. Replace both placeholders with the released values.
+4. Run `python scripts/validate_plugin_catalog.py plugin-catalog/serpapi.yaml` in the Hermes checkout and pass the PR's catalog CI. CI clones the pinned commit and runs `hermes plugins validate --install-deps` against it, including registration, dependency, and security checks.
+
+```yaml
+name: serpapi
+repo: https://github.com/serpapi/serpapi-hermes-plugin
+sha: REPLACE_WITH_RELEASE_COMMIT_SHA
+description: "SerpApi web, Maps, News, Shopping, Hotels, Flights, and Travel Explore for Hermes Agent."
+maintainer: serpapi
+tier: community
+category: web
+title: SerpApi
+version: "REPLACE_WITH_RELEASE_VERSION"
+docs_url: https://github.com/serpapi/serpapi-hermes-plugin#readme
+capabilities:
+  provides_tools:
+    - serpapi_maps_search
+    - serpapi_news_search
+    - serpapi_shopping_search
+    - serpapi_hotels_search
+    - serpapi_flights_search
+    - serpapi_travel_explore_search
+  provides_hooks: []
+  provides_middleware: []
+  requires_env:
+    - SERPAPI_API_KEY
+```
+
+The catalog's `community` tier applies because NousResearch does not maintain this plugin. The six listed tools are registered by this plugin; `web_search` belongs to Hermes and uses our registered web-search provider, so it is not an additional tool in the catalog entry.
+
+After the catalog PR is merged and available to clients, users can run `hermes plugins install serpapi`. Each later catalog release needs another PR updating `sha` and `version`. Optional catalog images and screenshots must use supported GitHub URLs pinned to the same commit. See the [catalog admission policy and schema](https://github.com/NousResearch/hermes-agent/blob/main/plugin-catalog/README.md) for the full requirements.

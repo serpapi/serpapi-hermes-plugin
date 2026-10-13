@@ -20,7 +20,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.11", "3.12", "3.13", "3.14"]
+        python-version: ["3.11", "3.12", "3.13", "3.14", "3.15"]
 
     steps:
       - name: Check out the repository
@@ -29,7 +29,7 @@ jobs:
       - name: Install uv and Python ${{ matrix.python-version }}
         uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8.1.0
         with:
-          version: "0.11.30"
+          version: "0.13.0"
           python-version: ${{ matrix.python-version }}
           enable-cache: true
 
@@ -63,7 +63,7 @@ jobs:
       - name: Install uv and Python 3.14
         uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8.1.0
         with:
-          version: "0.11.30"
+          version: "0.13.0"
           python-version: "3.14"
           enable-cache: true
 
@@ -93,7 +93,7 @@ jobs:
       - name: Install uv and Python 3.14
         uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8.1.0
         with:
-          version: "0.11.30"
+          version: "0.13.0"
           python-version: "3.14"
           enable-cache: true
 

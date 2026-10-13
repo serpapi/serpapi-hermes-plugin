@@ -12,6 +12,44 @@ _OUTPUT_PROPERTY = {
     ),
 }
 
+EXTRACT_SCHEMA = {
+    "name": "serpapi_extract",
+    "description": (
+        "Extract content from a public web page through SerpApi. Returns main page Markdown "
+        "by default. Set compact_mode to false for full structured JSON, including meta tags, "
+        "headings, links, images, price offers, and sections when present. Use web_extract for "
+        "ordinary page reading; use this tool for structured fields or CSS filtering. "
+        "Fetches one page without crawling or running JavaScript."
+    ),
+    "parameters": {
+        "type": "object",
+        "properties": {
+            "url": {
+                "type": "string",
+                "description": "Absolute http or https URL of a public page to extract.",
+            },
+            "compact_mode": {
+                "type": "boolean",
+                "default": True,
+                "description": (
+                    "True returns main page Markdown (plain text if Markdown is unavailable). "
+                    "False returns the full structured Extract JSON response."
+                ),
+            },
+            "include_tags": {
+                "type": "string",
+                "description": "Comma-separated CSS selectors to keep, e.g. 'article,main'.",
+            },
+            "exclude_tags": {
+                "type": "string",
+                "description": "Comma-separated CSS selectors to remove, e.g. 'nav,footer'.",
+            },
+        },
+        "required": ["url"],
+        "additionalProperties": False,
+    },
+}
+
 MAPS_SEARCH_SCHEMA = {
     "name": "serpapi_maps_search",
     "description": (

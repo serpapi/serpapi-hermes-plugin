@@ -1,13 +1,16 @@
-"""Hermes web-search provider backed by SerpApi's Google Light API."""
+"""Hermes web search and extraction backed by SerpApi."""
 
 from __future__ import annotations
 
 import logging
+from concurrent.futures import ThreadPoolExecutor
+from contextvars import copy_context
 from typing import Any
 
 from agent.web_search_provider import WebSearchProvider
 
 from .client import API_KEY_ENV, SerpApiError, call_serpapi, is_configured
+from .extraction import WebsitePolicyError, extract_page, page_content
 
 logger = logging.getLogger(__name__)
 
@@ -16,7 +19,7 @@ _MAX_RESULTS = 20
 
 
 class SerpApiWebSearchProvider(WebSearchProvider):
-    """Search-only Hermes provider using SerpApi's low-latency Google Light engine."""
+    """Hermes provider using Google Light for search and Extract for page content."""
 
     @property
     def name(self) -> str:
@@ -34,7 +37,43 @@ class SerpApiWebSearchProvider(WebSearchProvider):
         return True
 
     def supports_extract(self) -> bool:
-        return False
+        return True
+
+    def extract(self, urls: list[str], **kwargs: Any) -> list[dict[str, Any]]:
+        """Return ordered Hermes documents, preserving individual URL failures."""
+        if not urls:
+            return []
+
+        def extract_one(url: str) -> dict[str, Any]:
+            document: dict[str, Any] = {
+                "url": url,
+                "title": "",
+                "content": "",
+                "raw_content": "",
+            }
+            try:
+                payload = extract_page(url)
+                content = page_content(payload, format=kwargs.get("format"))
+                page = payload.get("page_information")
+                if not isinstance(page, dict):
+                    page = {}
+                document.update(
+                    title=page.get("title") or "",
+                    content=content,
+                    raw_content=content,
+                    metadata={**page, "sourceURL": url},
+                )
+            except (ValueError, SerpApiError) as exc:
+                document["error"] = str(exc)
+                if isinstance(exc, WebsitePolicyError):
+                    document["blocked_by_policy"] = True
+            return document
+
+        # Hermes allows five URLs per call and caps the whole dispatch at 120 seconds.
+        with ThreadPoolExecutor(max_workers=min(len(urls), 5)) as executor:
+            # Carry Hermes's profile-scoped credentials into each worker.
+            futures = [executor.submit(copy_context().run, extract_one, url) for url in urls]
+            return [future.result() for future in futures]
 
     def search(self, query: str, limit: int = 5) -> dict[str, Any]:
         """Search Google Light and return Hermes's standard web result envelope."""
@@ -83,8 +122,8 @@ class SerpApiWebSearchProvider(WebSearchProvider):
         """Describe SerpApi to Hermes's interactive provider picker."""
         return {
             "name": "SerpApi",
-            "badge": "Google Light",
-            "tag": "Fast Google Light web search via SerpApi.",
+            "badge": "Google Light + Extract",
+            "tag": "Google Light web search and page extraction via SerpApi.",
             "env_vars": [
                 {
                     "key": API_KEY_ENV,

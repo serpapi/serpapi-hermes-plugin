@@ -84,6 +84,35 @@ def test_live_web_search_returns_real_hermes_results(provider_module) -> None:
         assert isinstance(result["description"], str)
 
 
+def test_live_extract_returns_hermes_documents(provider_module) -> None:
+    urls = ["https://www.python.org/about/", "https://example.com/"]
+    results = provider_module.SerpApiWebSearchProvider().extract(urls, format="markdown")
+
+    assert [result["url"] for result in results] == urls
+    for result in results:
+        assert "error" not in result, result.get("error")
+        assert result["title"].strip()
+        assert result["content"].strip()
+        assert result["raw_content"] == result["content"]
+        assert result["metadata"]["sourceURL"] == result["url"]
+
+
+def test_live_extract_compact_and_full(tools_module) -> None:
+    import json
+
+    args = {"url": "https://www.python.org/about/"}
+    compact = tools_module.extract(args)
+    full = json.loads(tools_module.extract({**args, "compact_mode": False}))
+
+    assert "error" not in full, full.get("error")
+    assert "Python" in compact
+    assert compact == full["text_content"]["markdown"].strip()
+    assert full["page_information"]["title"].strip()
+    assert full["meta_tags"]
+    assert full["sections"]
+    assert len(compact) < len(json.dumps(full))
+
+
 def test_live_maps_search_returns_real_places(tools_module) -> None:
     limit = 3
     response = tools_module.maps_search(

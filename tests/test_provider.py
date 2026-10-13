@@ -19,7 +19,7 @@ def test_provider_metadata_and_capabilities(provider_module) -> None:
     assert provider.name == "serpapi"
     assert provider.display_name == "SerpApi"
     assert provider.supports_search() is True
-    assert provider.supports_extract() is False
+    assert provider.supports_extract() is True
     assert provider.get_setup_schema()["env_vars"][0]["key"] == "SERPAPI_API_KEY"
 
 
@@ -175,6 +175,7 @@ def test_register_adds_provider_and_specialized_tools(provider_module) -> None:
         "serpapi_hotels_search",
         "serpapi_flights_search",
         "serpapi_travel_explore_search",
+        "serpapi_extract",
     ]
     assert all(tool["toolset"] == "serpapi" for tool in context.tools)
     assert all(tool["requires_env"] == ["SERPAPI_API_KEY"] for tool in context.tools)

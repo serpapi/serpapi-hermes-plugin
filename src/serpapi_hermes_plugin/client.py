@@ -13,6 +13,7 @@ logger = logging.getLogger(__name__)
 API_KEY_ENV = "SERPAPI_API_KEY"
 ENDPOINT = "https://serpapi.com/search"
 TIMEOUT_SECONDS = 15.0
+EXTRACT_TIMEOUT_SECONDS = 60.0
 
 
 class SerpApiError(RuntimeError):
@@ -82,7 +83,7 @@ def call_serpapi(engine: str, params: Mapping[str, Any]) -> dict[str, Any] | str
             headers={
                 "Accept": "text/markdown" if output == "md" else "application/json",
             },
-            timeout=TIMEOUT_SECONDS,
+            timeout=EXTRACT_TIMEOUT_SECONDS if engine == "extract" else TIMEOUT_SECONDS,
         )
         response.raise_for_status()
     except httpx.HTTPStatusError as exc:

@@ -5,13 +5,13 @@
 [![Python versions](https://img.shields.io/pypi/pyversions/serpapi-hermes-plugin.svg)](https://pypi.org/project/serpapi-hermes-plugin/)
 [![License: MIT](https://img.shields.io/pypi/l/serpapi-hermes-plugin.svg)](https://github.com/serpapi/serpapi-hermes-plugin/blob/main/LICENSE)
 
-Give [Hermes Agent](https://hermes-agent.nousresearch.com/) fresh web, local, news, shopping, hotel, flight, and destination results with [SerpApi](https://serpapi.com/).
+Use [SerpApi](https://serpapi.com/) in [Hermes Agent](https://hermes-agent.nousresearch.com/) to search the web, places, news, shopping, hotels, flights, and destinations, and to read page content.
 
-The plugin adds SerpApi to Hermes in two ways:
+The plugin adds SerpApi search and extraction to Hermes:
 
-- Hermes's built-in `web_search` uses the fast Google Light engine.
+- Hermes's built-in `web_search` uses the fast Google Light engine, and `web_extract` reads page content through the Extract API.
 - Dedicated Maps, News, Shopping, Hotels, Flights, and Travel Explore tools let Hermes choose the right SerpApi engine for each request.
-- Direct SerpApi tools return token-efficient Markdown by default, including tables, links, and YAML frontmatter designed for agents.
+- Direct search tools return Markdown by default. `serpapi_extract` returns compact page content, with full structured JSON available through `compact_mode: false`.
 
 ## Ask Hermes to install it
 
@@ -34,15 +34,12 @@ Private API Key when installation or setup requests it. I can copy it from
 https://serpapi.com/dashboard. Save it through Hermes's configuration in
 ~/.hermes/.env without printing, logging, or committing it.
 
-Configure SerpApi as the Hermes web search backend, tell me whether Hermes must
-be restarted, and verify that web search, Maps, News, Shopping, Hotels, Flights,
-and Travel Explore tools are available. Use this key for future SerpApi
-searches and never expose it in output.
+Configure SerpApi as the Hermes web search and extract backend, tell me whether Hermes must be restarted, and verify that web search, page extraction, Maps, News, Shopping, Hotels, Flights, and Travel Explore tools are available. Use this key for future SerpApi requests and never expose it in output.
 ```
 
 ## Install
 
-You need a working [Hermes Agent installation](https://hermes-agent.nousresearch.com/docs/getting-started/quickstart/) and a SerpApi account. Choose one installation method below. Both register the plugin as `serpapi` and provide the same search tools.
+You need a working [Hermes Agent installation](https://hermes-agent.nousresearch.com/docs/getting-started/quickstart/) and a SerpApi account. Choose one installation method below. Both register the plugin as `serpapi` and provide the same search and extraction tools.
 
 ### From GitHub (recommended)
 
@@ -113,9 +110,7 @@ In the **Web Search & Extract** section:
 2. Paste the Private API Key copied from your SerpApi dashboard.
 3. Confirm the selection.
 
-Hermes saves the key as `SERPAPI_API_KEY` in its environment configuration and
-selects SerpApi for future `web_search` calls. Restart Hermes if a session was
-already running.
+Hermes saves the key as `SERPAPI_API_KEY` in its environment configuration and selects SerpApi for future `web_search` calls. Also select SerpApi as the extract backend, or set `web.extract_backend: serpapi` as shown below. Restart Hermes if a session was already running.
 
 ## Manual API-key setup
 
@@ -134,20 +129,23 @@ plugins:
 
 web:
   search_backend: serpapi
+  extract_backend: serpapi
 ```
 
 You may also export `SERPAPI_API_KEY` in the environment that starts Hermes.
 The environment variable takes precedence over the value in `~/.hermes/.env`.
 
-## Search capabilities
+## Search and extraction capabilities
 
-Hermes's built-in `web_search` contract requires structured web records, so the plugin requests JSON for that provider and converts it to Hermes's standard response. The six directly registered SerpApi tools request [`output=md`](https://serpapi.com/search-api#api-parameters-output) by default and return SerpApi's Markdown without reparsing it. This preserves result tables and links while using fewer tokens than full JSON.
+Hermes's built-in `web_search` contract requires structured web records, so the plugin requests JSON for that provider and converts it to Hermes's standard response. The six direct search tools request [`output=md`](https://serpapi.com/search-api#api-parameters-output) by default and return SerpApi's Markdown without reparsing it. This preserves result tables and links while using fewer tokens than full JSON.
 
-Each direct tool also accepts `output: "json"` when the agent needs structured fields such as a Google Flights `departure_token`. Markdown remains the schema default.
+Each direct search tool also accepts `output: "json"` when the agent needs structured fields such as a Google Flights `departure_token`. Markdown remains the schema default.
 
 | What you ask for | Hermes tool | SerpApi engine |
 |---|---|---|
 | General web research | `web_search` | `google_light` |
+| Read page content | `web_extract` | [`extract`](https://serpapi.com/extract-api.md) |
+| Page content, structured fields, or CSS filtering | `serpapi_extract` | `extract` |
 | Places and local businesses | `serpapi_maps_search` | `google_maps` |
 | Current and recent news | `serpapi_news_search` | `google_news_light` |
 | Products, prices, and merchants | `serpapi_shopping_search` | `google_shopping_light` |
@@ -160,6 +158,8 @@ Hermes chooses a tool from your request. Each tool selects and validates its own
 Example prompts:
 
 - "Search the web for the latest Python 3.14 release notes."
+- "Read https://www.python.org/about/ and summarize it."
+- "Extract this product page with compact_mode false so I can inspect its price offers."
 - "Find highly rated coffee shops near Times Square."
 - "Show me recent news about reusable rockets."
 - "Find well-reviewed laptops under $1,200 with free shipping."
@@ -168,6 +168,26 @@ Example prompts:
 - "Where can I go from Bengaluru for a one-week beach trip in December?"
 
 Google Flights returns outbound choices first for round trips. To inspect return-flight choices, call `serpapi_flights_search` with `output: "json"`, select a `departure_token`, then call the tool again with that token and the same route and dates.
+
+## Page extraction
+
+Set `web.extract_backend: serpapi` to use SerpApi with Hermes's built-in `web_extract`. It returns main page content and preserves individual failures in a batch. Hermes handles its usual character limit and storage of long pages.
+
+Hermes does not forward a `compact_mode` parameter from its built-in tool. Use `serpapi_extract` when you need control over the response:
+
+```json
+{"url": "https://www.python.org/about/", "compact_mode": true}
+```
+
+`compact_mode` defaults to `true` and returns main page Markdown, falling back to complete plain text if Markdown is unavailable. The request uses `include_markdown=true` and `json_restrictor` to omit the other structured fields from the API response. Compact mode reduces the payload; it does not change the API's parsing work or shorten the page text.
+
+Set `compact_mode` to `false` to return the full Extract JSON, including tags, links, images, price offers, sections, and other fields present on the page:
+
+```json
+{"url": "https://example.com/product", "compact_mode": false}
+```
+
+Both modes accept optional `include_tags` and `exclude_tags` CSS selectors, such as `"include_tags": "article,main"` or `"exclude_tags": "nav,footer"`. Requests use `mode=scrape` for one public page at a time. The Extract API does not run JavaScript. See the [Extract API documentation](https://serpapi.com/extract-api.md).
 
 ## Contributing
 

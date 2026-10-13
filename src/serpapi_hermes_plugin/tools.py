@@ -7,6 +7,7 @@ from datetime import date
 from typing import Any
 
 from .client import SerpApiError, call_serpapi
+from .extraction import extract_page, page_content
 from .markdown import limit_result_table
 
 _MAX_RESULTS = 20
@@ -22,6 +23,22 @@ def _error(message: str) -> str:
 
 def _query(args: dict[str, Any]) -> str:
     return str(args.get("query") or "").strip()
+
+
+def extract(args: dict[str, Any], **kwargs: Any) -> str:
+    """Extract one public page as content or full structured JSON."""
+    del kwargs
+    try:
+        compact_mode = args.get("compact_mode", True)
+        payload = extract_page(
+            args.get("url"),
+            compact_mode=compact_mode,
+            include_tags=args.get("include_tags"),
+            exclude_tags=args.get("exclude_tags"),
+        )
+        return page_content(payload) if compact_mode else _json(payload)
+    except (ValueError, SerpApiError) as exc:
+        return _error(str(exc))
 
 
 def _output(args: dict[str, Any]) -> str:

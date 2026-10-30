@@ -120,7 +120,7 @@ With a current Hermes checkout and the plugin's dependencies available, validate
 
 ```bash
 hermes plugins doctor /path/to/serpapi-hermes-plugin --ci
-hermes plugins validate /path/to/serpapi-hermes-plugin
+hermes plugins validate /path/to/serpapi-hermes-plugin --install-deps
 ```
 
 [SerpApi is listed in the Hermes catalog](https://hermes-agent.nousresearch.com/docs/plugins/serpapi). Hermes pins each catalog release to a reviewed commit. Its [admission policy](https://github.com/NousResearch/hermes-agent/blob/main/plugin-catalog/README.md) requires a maintainer-reviewed PR for every update and forbids plugin self-updaters. GitHub installs can follow our repository through `hermes plugins update serpapi`; catalog installs follow the reviewed pin.

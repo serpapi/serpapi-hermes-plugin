@@ -41,7 +41,7 @@ Configure SerpApi as the Hermes web search and extract backend, tell me whether 
 
 ## Install
 
-You need a working [Hermes Agent installation](https://hermes-agent.nousresearch.com/docs/getting-started/quickstart/) and a SerpApi account. Choose one installation method below. Both register the plugin as `serpapi` and provide the same search and extraction tools.
+You need [Hermes Agent](https://hermes-agent.nousresearch.com/docs/getting-started/quickstart/) 0.21.6 or later and a SerpApi account. Choose one installation method below. Both register the plugin as `serpapi` and provide the same search and extraction tools.
 
 ### From GitHub (recommended)
 

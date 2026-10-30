@@ -1,5 +1,6 @@
 name: serpapi
-version: 1.1.1
+version: 1.2.0
+requires_hermes: ">=0.21.6"
 description: "SerpApi search, page scraping, site mapping, and crawling for Hermes Agent."
 author: SerpApi
 license: MIT

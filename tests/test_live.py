@@ -142,17 +142,24 @@ def test_live_extract_modes_compact_and_full(tools_module, monkeypatch, mode) ->
             entries = payload[field]
             assert entries
             for entry in entries:
-                assert "error" not in entry, entry.get("error")
                 _assert_http_url(entry["url"])
                 if payload is compact_payload:
                     assert f"<{entry['url']}>" in compact
-                if mode == "crawl":
+                if entry.get("error"):
+                    assert mode == "crawl", entry["error"]
+                    if payload is compact_payload:
+                        assert f"Error: {entry['error']}" in compact
+                elif mode == "crawl":
                     assert entry["markdown"].strip()
                     if payload is compact_payload:
                         assert entry["markdown"].strip() in compact
             if mode == "crawl":
                 assert len(entries) == 2
                 assert {page["depth"] for page in entries} == {0, 1}
+                assert any(
+                    page["depth"] == 0 and page.get("markdown", "").strip()
+                    and not page.get("error") for page in entries
+                )
 
 
 @pytest.mark.parametrize("output", ["md", "json"])

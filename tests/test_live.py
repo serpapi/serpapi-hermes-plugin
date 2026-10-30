@@ -99,7 +99,16 @@ def test_live_extract_returns_hermes_documents(provider_module) -> None:
 
 
 @pytest.mark.parametrize("mode", ["scrape", "map", "crawl"])
-def test_live_extract_modes_compact_and_full(tools_module, mode) -> None:
+def test_live_extract_modes_compact_and_full(tools_module, monkeypatch, mode) -> None:
+    responses = []
+    extract_page = tools_module.extract_page
+
+    def capture_response(*args, **kwargs):
+        payload = extract_page(*args, **kwargs)
+        responses.append(payload)
+        return payload
+
+    monkeypatch.setattr(tools_module, "extract_page", capture_response)
     args = {
         "url": "https://books.toscrape.com/catalogue/category/books/travel_2/index.html",
         "mode": mode,
@@ -117,22 +126,33 @@ def test_live_extract_modes_compact_and_full(tools_module, mode) -> None:
     full = json.loads(tools_module.extract({**args, "compact_mode": False}))
 
     assert "error" not in full, full.get("error")
+    assert len(responses) == 2, compact
+    # Separate live requests can return different page text or discovered URLs.
+    compact_payload = responses[0]
     if mode == "scrape":
-        assert compact == full["markdown"].strip()
-        assert "# A Light in the Attic" in compact
-        assert "£51.77" in compact
-        assert "Add to basket" not in compact
+        assert compact == compact_payload["markdown"].strip()
+        for content in (compact, full["markdown"]):
+            assert "# A Light in the Attic" in content
+            assert "£51.77" in content
+            assert "Add to basket" not in content
         assert full["page_information"]["title"].strip()
     else:
-        entries = full["urls" if mode == "map" else "pages"]
-        assert entries
-        for entry in entries:
-            _assert_http_url(entry["url"])
-            assert f"<{entry['url']}>" in compact
-        if mode == "crawl":
-            assert len(entries) == 2
-            assert {page["depth"] for page in entries} == {0, 1}
-            assert all(page["markdown"].strip() in compact for page in entries)
+        field = "urls" if mode == "map" else "pages"
+        for payload in (compact_payload, full):
+            entries = payload[field]
+            assert entries
+            for entry in entries:
+                assert "error" not in entry, entry.get("error")
+                _assert_http_url(entry["url"])
+                if payload is compact_payload:
+                    assert f"<{entry['url']}>" in compact
+                if mode == "crawl":
+                    assert entry["markdown"].strip()
+                    if payload is compact_payload:
+                        assert entry["markdown"].strip() in compact
+            if mode == "crawl":
+                assert len(entries) == 2
+                assert {page["depth"] for page in entries} == {0, 1}
 
 
 @pytest.mark.parametrize("output", ["md", "json"])

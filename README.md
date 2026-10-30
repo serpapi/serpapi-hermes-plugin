@@ -176,7 +176,7 @@ With `web.extract_backend: serpapi`, Hermes uses SerpApi to read pages. The `ser
 - `map`: Discover a website's URLs.
 - `crawl`: Follow links and read multiple pages.
 
-Results are compact by default, with full JSON available through `compact_mode: false`. The agent can limit crawl size and depth, include sitemaps or subdomains, and filter page elements.
+Results are compact by default, with full JSON available through `compact_mode: false`. Search URLs return results from their dedicated engines. The agent can limit crawl size and depth, include sitemaps or subdomains, and filter page elements.
 
 Pages are fetched without running JavaScript. Crawling uses one search credit per successfully extracted page. See the [Extract API documentation](https://serpapi.com/extract-api) for details.
 

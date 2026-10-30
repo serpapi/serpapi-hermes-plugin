@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from typing import Any
 from urllib.parse import unquote, urlsplit
 
@@ -15,19 +16,27 @@ class WebsitePolicyError(SerpApiError):
 
 
 def _check_url_policy(url: str) -> None:
-    """Apply Hermes's secret-URL and website policy checks before any API request."""
+    """Apply Hermes's URL, secret and website checks to seeds and returned targets."""
     try:
         from agent.redact import _PREFIX_RE
+        from tools.url_safety import is_safe_url
         from tools.website_policy import check_website_access
     except ImportError:
         raise SerpApiError(
             "Update Hermes to a version with URL safety and website policy support"
         ) from None
 
-    if _PREFIX_RE.search(url) or _PREFIX_RE.search(unquote(url)):
+    try:
+        normalized_url = _normalize_url(url)
+    except ValueError:
+        raise WebsitePolicyError("Blocked: invalid extraction URL") from None
+    candidates = (url, unquote(url), normalized_url, unquote(normalized_url))
+    if any(_PREFIX_RE.search(candidate) for candidate in candidates):
         raise WebsitePolicyError("Blocked: URL contains what appears to be an API key or token")
-    if check_website_access(url):
+    if check_website_access(url) or check_website_access(normalized_url):
         raise WebsitePolicyError("Blocked by website policy")
+    if not is_safe_url(normalized_url):
+        raise WebsitePolicyError("Blocked: URL targets a private, internal, or unresolved address")
 
 
 def _normalize_url(url: str) -> str:
@@ -102,28 +111,20 @@ def extract_page(
             if not isinstance(value, str):
                 raise ValueError(f"{name} must be a string of CSS selectors")
             params[name] = value.strip()
-    if compact_mode:
-        params["json_restrictor"] = {
-            "scrape": "page_information,markdown,error",
-            "map": "search_parameters,page_information,urls[].{url,title,source},error",
-            "crawl": (
-                "search_parameters,page_information,"
-                "pages[].{url,depth,page_information,markdown,error},error"
-            ),
-        }[mode]
-
+    # Extract can route any supported search URL to a dedicated engine. Filter
+    # locally so an ordinary-page field allowlist cannot discard that engine's results.
     _check_url_policy(url)
-    if normalized_url != url:
-        _check_url_policy(normalized_url)
 
     payload = call_serpapi("extract", params)
     if not isinstance(payload, dict):
         raise SerpApiError("SerpApi returned an unexpected Extract response")
     _check_page_urls(payload)
+    if _routed_engine(payload):
+        return _compact_routed(payload, normalized_url) if compact_mode else payload
     if mode != "scrape":
         field = "urls" if mode == "map" else "pages"
-        # The API omits empty arrays. Keep the echoed mode in compact responses
-        # so an empty map can be distinguished from an unrelated engine response.
+        # The API omits empty arrays. Use the echoed mode to distinguish an
+        # empty map from an unrelated response.
         search_parameters = payload.get("search_parameters")
         matches_mode = (
             isinstance(search_parameters, dict)
@@ -137,6 +138,8 @@ def extract_page(
         for entry in entries:
             try:
                 _check_entry_urls(entry, mode)
+                if compact_mode and mode == "crawl" and _routed_engine(entry):
+                    entry = {**entry, **_compact_routed(entry, entry["url"])}
             except SerpApiError as exc:
                 # Keep other results without exposing the refused URL or page content.
                 failure: dict[str, Any] = {"error": str(exc)}
@@ -155,7 +158,6 @@ def extract_page(
             }
         return {**payload, field: checked_entries}
     if compact_mode:
-        # Keep the compact contract even if an upstream response ignores the filter.
         return {key: payload[key] for key in ("page_information", "markdown") if key in payload}
     return payload
 
@@ -165,13 +167,7 @@ def _check_entry_urls(entry: Any, mode: str) -> None:
     if not isinstance(entry, dict) or not isinstance(entry.get("url"), str):
         raise SerpApiError(f"SerpApi returned an unexpected {mode} entry")
     target = entry["url"]
-    try:
-        normalized_target = _normalize_url(target)
-    except ValueError:
-        raise SerpApiError(f"SerpApi returned an unexpected {mode} URL") from None
     _check_url_policy(target)
-    if normalized_target != target:
-        _check_url_policy(normalized_target)
     _check_page_urls(entry)
 
 
@@ -183,11 +179,38 @@ def _check_page_urls(payload: dict[str, Any]) -> None:
             target = page.get(field)
             if isinstance(target, str) and target:
                 _check_url_policy(target)
+    metadata = payload.get("search_metadata")
+    if isinstance(metadata, dict):
+        for field, target in metadata.items():
+            if field.endswith("_url") and isinstance(target, str) and target:
+                _check_url_policy(target)
+
+
+def _routed_engine(payload: dict[str, Any]) -> str | None:
+    parameters = payload.get("search_parameters")
+    engine = parameters.get("engine") if isinstance(parameters, dict) else None
+    return engine if isinstance(engine, str) and engine and engine != "extract" else None
+
+
+def _compact_routed(payload: dict[str, Any], url: str) -> dict[str, Any]:
+    """Preserve arbitrary dedicated-engine results without archive metadata."""
+    engine = _routed_engine(payload)
+    results = {key: value for key, value in payload.items()
+               if key not in {"search_metadata", "search_parameters", "serpapi_pagination"}}
+    if not results:
+        raise SerpApiError("SerpApi returned no results for this routed URL")
+    title = f"{engine} results"
+    content = json.dumps(results, ensure_ascii=False, indent=2)
+    return {
+        "search_parameters": {"engine": engine},
+        "page_information": {"title": title, "url": url},
+        "markdown": f"## {title}\n\n```json\n{content}\n```",
+    }
 
 
 def compact_content(payload: dict[str, Any], mode: str) -> str:
     """Render compact Extract results without losing per-page crawl failures."""
-    if mode == "scrape":
+    if mode == "scrape" or _routed_engine(payload):
         return page_content(payload)
     if mode == "map":
         return "\n".join(

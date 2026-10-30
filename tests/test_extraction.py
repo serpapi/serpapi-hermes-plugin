@@ -43,7 +43,7 @@ def test_scrape_formats_and_css_filters(tools_module, extract_response, compact_
     params = requests[0]["params"]
     assert (params["engine"], params["mode"], params["output"]) == ("extract", "scrape", "json")
     assert (params["include_tags"], params["exclude_tags"]) == ("main,article", "nav,footer")
-    assert ("json_restrictor" in params) is compact_mode
+    assert "json_restrictor" not in params
     assert "compact_mode" not in params
 
 
@@ -54,6 +54,46 @@ def test_missing_markdown_is_not_replaced_by_a_truncated_excerpt(tools_module, e
     result = json.loads(tools_module.extract({"url": "https://example.com"}))
     assert result["success"] is False
     assert "no page content" in result["error"]
+
+
+def test_routed_engines_preserve_results_in_compact_full_and_provider(
+    tools_module, extract_response,
+):
+    from serpapi_hermes_plugin.provider import SerpApiWebSearchProvider
+
+    payload, requests = extract_response
+    payload.clear()
+    payload.update({
+        "search_parameters": {"engine": "google", "q": "coffee"},
+        "search_metadata": {"google_url": "https://www.google.com/search?q=coffee"},
+        "organic_results": [{"title": "Coffee", "link": "https://example.com/coffee"}],
+        "shopping_results": [{"title": "Coffee beans", "price": "$12"}],
+    })
+    url = "https://www.google.com/search?q=coffee"
+    for mode in ("scrape", "map", "crawl"):
+        compact = tools_module.extract({"url": url, "mode": mode})
+        data = json.loads(compact.split("```json\n", 1)[1].rsplit("\n```", 1)[0])
+        assert data["organic_results"] == payload["organic_results"]
+        assert data["shopping_results"] == payload["shopping_results"]
+        assert "search_metadata" not in data
+    full = json.loads(tools_module.extract({"url": url, "compact_mode": False}))
+    assert full == payload
+    document = SerpApiWebSearchProvider().extract([url])[0]
+    assert "error" not in document
+    assert document["content"] == document["raw_content"] == compact
+    assert document["title"] == "google results"
+    assert document["metadata"]["sourceURL"] == url
+    assert all("json_restrictor" not in request["params"] for request in requests)
+
+    routed_page = {**payload, "url": url, "depth": 1}
+    payload.clear()
+    payload.update({
+        "search_parameters": {"engine": "extract", "mode": "crawl"},
+        "pages": [routed_page],
+    })
+    crawl = tools_module.extract({"url": "https://example.com", "mode": "crawl"})
+    assert f"<{url}>" in crawl
+    assert '"organic_results"' in crawl and '"shopping_results"' in crawl
 
 
 @pytest.mark.parametrize("args", [
@@ -116,6 +156,7 @@ def test_native_batch_preserves_order_profile_and_partial_failures(provider_modu
 @pytest.mark.parametrize("target", [
     "https://example.com/?token=%73%6b%2d" + "a" * 30,
     "https://blocked.example/",
+    "http://127.0.0.1/",
 ])
 def test_blocked_seed_never_reaches_serpapi(
     tools_module, provider_module, extract_response, monkeypatch, target
@@ -123,6 +164,8 @@ def test_blocked_seed_never_reaches_serpapi(
     _, requests = extract_response
     monkeypatch.setattr(sys.modules["tools.website_policy"], "check_website_access",
                         lambda url: {"blocked": True} if "blocked.example" in url else None)
+    monkeypatch.setattr(sys.modules["tools.url_safety"], "is_safe_url",
+                        lambda url: "127.0.0.1" not in url)
 
     direct = json.loads(tools_module.extract({"url": target}))
     native = provider_module.SerpApiWebSearchProvider().extract([target])[0]
@@ -137,6 +180,7 @@ def test_blocked_seed_never_reaches_serpapi(
 @pytest.mark.parametrize("compact_mode,target", [
     (True, "https://example.com/?token=sk-" + "a" * 30),
     (False, "https://blocked.example/"),
+    (True, "http://[::1]/"),
 ])
 def test_blocked_redirect_never_returns_content(
     tools_module, provider_module, extract_response, monkeypatch, compact_mode, target
@@ -145,6 +189,8 @@ def test_blocked_redirect_never_returns_content(
     payload["page_information"]["final_url"] = target
     monkeypatch.setattr(sys.modules["tools.website_policy"], "check_website_access",
                         lambda url: {"blocked": True} if "blocked.example" in url else None)
+    monkeypatch.setattr(sys.modules["tools.url_safety"], "is_safe_url",
+                        lambda url: "[::1]" not in url)
 
     direct = json.loads(tools_module.extract({
         "url": "https://example.com/product", "compact_mode": compact_mode,
@@ -180,9 +226,12 @@ def test_site_modes_preserve_good_results_and_isolate_failures(
          "page_information": {"final_url": "https://blocked.example/"}},
         {"url": "https://example.com/?sk-" + "a" * 30, "markdown": "Secret page"},
         {"url": "file:///etc/passwd", "markdown": "Malformed page"},
+        {"url": "http://10.0.0.1/", "markdown": "Private page"},
     ]})
     monkeypatch.setattr(sys.modules["tools.website_policy"], "check_website_access",
                         lambda url: {"blocked": True} if "blocked.example" in url else None)
+    monkeypatch.setattr(sys.modules["tools.url_safety"], "is_safe_url",
+                        lambda url: "10.0.0.1" not in url)
     options = ({"include_sitemap": False} if mode == "map" else {"max_pages": 2, "max_depth": 1})
     args = {"url": "https://example.com", "mode": mode, "include_subdomains": True, **options}
 
@@ -201,12 +250,13 @@ def test_site_modes_preserve_good_results_and_isolate_failures(
     assert all("error" in entry and "url" not in entry for entry in full[field][2:])
     for hidden in (
         "test-secret", "Blocked page", "Secret page", "Malformed page", "sk-", "blocked.example",
+        "Private page", "10.0.0.1",
     ):
         assert hidden not in compact + full_text
     for request in requests:
         for key, value in {**options, "include_subdomains": True}.items():
             assert request["params"][key] == value
-    assert "json_restrictor" in requests[0]["params"]
+    assert "json_restrictor" not in requests[0]["params"]
     assert "json_restrictor" not in requests[1]["params"]
 
 

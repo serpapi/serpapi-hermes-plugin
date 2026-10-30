@@ -45,6 +45,8 @@ EXTRACT_SCHEMA = {
                 "description": (
                     "True returns page Markdown for scrape, URL links for map, "
                     "or page Markdown grouped by URL for crawl. "
+                    "URLs routed to dedicated search engines return their results in a JSON "
+                    "code block within Markdown. "
                     "False returns the full structured Extract JSON response."
                 ),
             },

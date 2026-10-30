@@ -36,8 +36,11 @@ def fake_hermes(monkeypatch: pytest.MonkeyPatch):
     redact_module._PREFIX_RE = re.compile(r"sk-[A-Za-z0-9]{20,}")
     policy_module = types.ModuleType("tools.website_policy")
     policy_module.check_website_access = lambda url: None
+    safety_module = types.ModuleType("tools.url_safety")
+    safety_module.is_safe_url = lambda url: True
     monkeypatch.setitem(sys.modules, "agent.redact", redact_module)
     monkeypatch.setitem(sys.modules, "tools.website_policy", policy_module)
+    monkeypatch.setitem(sys.modules, "tools.url_safety", safety_module)
     return WebSearchProvider
 
 

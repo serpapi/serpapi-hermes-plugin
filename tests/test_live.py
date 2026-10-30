@@ -98,6 +98,22 @@ def test_live_extract_returns_hermes_documents(provider_module) -> None:
         assert result["metadata"]["sourceURL"] == result["url"]
 
 
+def test_live_extract_routes_search_urls(tools_module, provider_module) -> None:
+    url = "https://www.google.com/search?q=coffee"
+    compact = tools_module.extract({"url": url})
+    full = json.loads(tools_module.extract({"url": url, "compact_mode": False}))
+    document = provider_module.SerpApiWebSearchProvider().extract([url])[0]
+
+    assert "error" not in full, full.get("error")
+    assert full["search_parameters"]["engine"] == "google"
+    assert full["organic_results"]
+    assert "error" not in document, document.get("error")
+    for content in (compact, document["content"]):
+        data = json.loads(content.split("```json\n", 1)[1].rsplit("\n```", 1)[0])
+        assert data["organic_results"]
+        assert all(result["title"] and result["link"] for result in data["organic_results"])
+
+
 @pytest.mark.parametrize("mode", ["scrape", "map", "crawl"])
 def test_live_extract_modes_compact_and_full(tools_module, monkeypatch, mode) -> None:
     responses = []

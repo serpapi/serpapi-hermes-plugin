@@ -1,4 +1,4 @@
-"""Hermes tool schemas for SerpApi's specialized search engines."""
+"""Hermes tool schemas for SerpApi search and extraction."""
 
 from __future__ import annotations
 
@@ -15,24 +15,36 @@ _OUTPUT_PROPERTY = {
 EXTRACT_SCHEMA = {
     "name": "serpapi_extract",
     "description": (
-        "Extract content from a public web page through SerpApi. Returns main page Markdown "
-        "by default. Set compact_mode to false for full structured JSON, including meta tags, "
-        "headings, links, images, price offers, and sections when present. Use web_extract for "
-        "ordinary page reading; use this tool for structured fields or CSS filtering. "
-        "Fetches one page without crawling or running JavaScript."
+        "Scrape a public page, map a site's URLs, or crawl multiple pages through SerpApi. "
+        "Defaults to mode='scrape' and compact Markdown. Map returns URL links; crawl returns "
+        "page Markdown grouped by URL, including per-page errors. Set compact_mode to false "
+        "for full structured JSON. Crawl costs one search credit per successfully extracted "
+        "page; use max_pages to bound the crawl. Use web_extract for ordinary page reading; "
+        "use this tool for site discovery, crawling, structured fields, or CSS filtering. "
+        "Does not run JavaScript."
     ),
     "parameters": {
         "type": "object",
         "properties": {
             "url": {
                 "type": "string",
-                "description": "Absolute http or https URL of a public page to extract.",
+                "description": "Absolute http or https URL of a public page or starting page.",
+            },
+            "mode": {
+                "type": "string",
+                "enum": ["scrape", "map", "crawl"],
+                "default": "scrape",
+                "description": (
+                    "scrape extracts one page; map discovers URLs from links and sitemaps; "
+                    "crawl follows links on the same website and extracts the visited pages."
+                ),
             },
             "compact_mode": {
                 "type": "boolean",
                 "default": True,
                 "description": (
-                    "True returns main page Markdown (plain text if Markdown is unavailable). "
+                    "True returns page Markdown for scrape, URL links for map, "
+                    "or page Markdown grouped by URL for crawl. "
                     "False returns the full structured Extract JSON response."
                 ),
             },
@@ -43,6 +55,37 @@ EXTRACT_SCHEMA = {
             "exclude_tags": {
                 "type": "string",
                 "description": "Comma-separated CSS selectors to remove, e.g. 'nav,footer'.",
+            },
+            "max_pages": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 100,
+                "description": (
+                    "Crawl only. Maximum pages, including the starting page. Defaults to 10. "
+                    "Each successfully extracted page costs one search credit."
+                ),
+            },
+            "max_depth": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 3,
+                "description": (
+                    "Crawl only. Link depth from the starting page. Defaults to 2; "
+                    "0 extracts only the starting page."
+                ),
+            },
+            "include_subdomains": {
+                "type": "boolean",
+                "description": (
+                    "Map or crawl only. Include other subdomains of the same site. "
+                    "Defaults to false (same host only)."
+                ),
+            },
+            "include_sitemap": {
+                "type": "boolean",
+                "description": (
+                    "Map only. Read sitemaps from /sitemap.xml and /robots.txt. Defaults to true."
+                ),
             },
         },
         "required": ["url"],
@@ -94,7 +137,9 @@ MAPS_SEARCH_SCHEMA = {
             },
             "language": {
                 "type": "string",
-                "description": "Optional two-letter language code, such as 'en' or 'es'.",
+                "description": (
+                    "Optional language code, such as 'en', 'fil', 'en-gb', or 'es-419'."
+                ),
             },
             "country": {
                 "type": "string",
@@ -133,7 +178,9 @@ NEWS_SEARCH_SCHEMA = {
             },
             "language": {
                 "type": "string",
-                "description": "Optional two-letter language code, such as 'en' or 'fr'.",
+                "description": (
+                    "Optional language code, such as 'en', 'fil', 'en-gb', or 'es-419'."
+                ),
             },
             "country": {
                 "type": "string",
@@ -172,7 +219,9 @@ SHOPPING_SEARCH_SCHEMA = {
             },
             "language": {
                 "type": "string",
-                "description": "Optional two-letter language code, such as 'en' or 'de'.",
+                "description": (
+                    "Optional language code, such as 'en', 'fil', 'en-gb', or 'es-419'."
+                ),
             },
             "country": {
                 "type": "string",
@@ -272,7 +321,9 @@ HOTELS_SEARCH_SCHEMA = {
             },
             "language": {
                 "type": "string",
-                "description": "Optional two-letter language code, such as 'en' or 'fr'.",
+                "description": (
+                    "Optional language code, such as 'en', 'fil', 'en-gb', or 'es-419'."
+                ),
             },
             "country": {
                 "type": "string",
@@ -392,7 +443,9 @@ FLIGHTS_SEARCH_SCHEMA = {
             },
             "language": {
                 "type": "string",
-                "description": "Optional two-letter language code, such as 'en' or 'fr'.",
+                "description": (
+                    "Optional language code, such as 'en', 'fil', 'en-gb', or 'es-419'."
+                ),
             },
             "country": {
                 "type": "string",
@@ -537,7 +590,9 @@ TRAVEL_EXPLORE_SEARCH_SCHEMA = {
             },
             "language": {
                 "type": "string",
-                "description": "Optional two-letter language code, such as 'en' or 'fr'.",
+                "description": (
+                    "Optional language code, such as 'en', 'fil', 'en-gb', or 'es-419'."
+                ),
             },
             "country": {
                 "type": "string",

@@ -8,6 +8,8 @@ from typing import Any
 
 import httpx
 
+from .markdown import response_error
+
 logger = logging.getLogger(__name__)
 
 API_KEY_ENV = "SERPAPI_API_KEY"
@@ -110,6 +112,9 @@ def call_serpapi(engine: str, params: Mapping[str, Any]) -> dict[str, Any] | str
         markdown = response.text.replace(api_key, "[redacted]").strip()
         if not markdown:
             raise SerpApiError("SerpApi returned an empty Markdown response")
+        error = response_error(markdown) if engine != "extract" else None
+        if error:
+            raise SerpApiError(_safe_api_error(error, api_key))
         return markdown
 
     try:

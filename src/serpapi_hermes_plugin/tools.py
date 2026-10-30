@@ -3,11 +3,12 @@
 from __future__ import annotations
 
 import json
+import re
 from datetime import date
 from typing import Any
 
 from .client import SerpApiError, call_serpapi
-from .extraction import extract_page, page_content
+from .extraction import compact_content, extract_page
 from .markdown import limit_result_table
 
 _MAX_RESULTS = 20
@@ -26,17 +27,23 @@ def _query(args: dict[str, Any]) -> str:
 
 
 def extract(args: dict[str, Any], **kwargs: Any) -> str:
-    """Extract one public page as content or full structured JSON."""
+    """Scrape, map, or crawl a public site as compact content or full JSON."""
     del kwargs
     try:
         compact_mode = args.get("compact_mode", True)
+        mode = args.get("mode", "scrape")
         payload = extract_page(
             args.get("url"),
+            mode=mode,
             compact_mode=compact_mode,
             include_tags=args.get("include_tags"),
             exclude_tags=args.get("exclude_tags"),
+            max_pages=args.get("max_pages"),
+            max_depth=args.get("max_depth"),
+            include_subdomains=args.get("include_subdomains"),
+            include_sitemap=args.get("include_sitemap"),
         )
-        return page_content(payload) if compact_mode else _json(payload)
+        return compact_content(payload, mode) if compact_mode else _json(payload)
     except (ValueError, SerpApiError) as exc:
         return _error(str(exc))
 
@@ -61,6 +68,15 @@ def _code(args: dict[str, Any], name: str) -> str | None:
         return None
     if len(value) != 2 or not value.isalpha():
         raise ValueError(f"{name} must be a two-letter code")
+    return value
+
+
+def _language(args: dict[str, Any]) -> str | None:
+    value = str(args.get("language") or "").strip().lower()
+    if not value:
+        return None
+    if not re.fullmatch(r"[a-z]{2,3}(?:-(?:[a-z]{2}|[0-9]{3}))?", value):
+        raise ValueError("language must use a code such as 'en', 'fil', 'en-gb', or 'es-419'")
     return value
 
 
@@ -192,7 +208,7 @@ def maps_search(args: dict[str, Any], **kwargs: Any) -> str:
         params: dict[str, Any] = {
             "q": query,
             "type": "search",
-            "hl": _code(args, "language"),
+            "hl": _language(args),
             "gl": _code(args, "country"),
             "output": output,
         }
@@ -274,7 +290,7 @@ def news_search(args: dict[str, Any], **kwargs: Any) -> str:
             {
                 "q": query,
                 "location": str(args.get("location") or "").strip(),
-                "hl": _code(args, "language"),
+                "hl": _language(args),
                 "gl": _code(args, "country"),
                 "output": output,
             },
@@ -344,7 +360,7 @@ def shopping_search(args: dict[str, Any], **kwargs: Any) -> str:
             {
                 "q": query,
                 "location": str(args.get("location") or "").strip(),
-                "hl": _code(args, "language"),
+                "hl": _language(args),
                 "gl": _code(args, "country"),
                 "min_price": minimum_price,
                 "max_price": maximum_price,
@@ -451,7 +467,7 @@ def hotels_search(args: dict[str, Any], **kwargs: Any) -> str:
                 **passengers,
                 "children_ages": children_ages,
                 "currency": _currency(args),
-                "hl": _code(args, "language"),
+                "hl": _language(args),
                 "gl": _code(args, "country"),
                 "min_price": minimum_price,
                 "max_price": maximum_price,
@@ -529,7 +545,7 @@ def flights_search(args: dict[str, Any], **kwargs: Any) -> str:
                 "travel_class": travel_class,
                 **_passengers(args, include_infants=True),
                 "currency": _currency(args),
-                "hl": _code(args, "language"),
+                "hl": _language(args),
                 "gl": _code(args, "country"),
                 "stops": stops,
                 "sort_by": sort_by,
@@ -618,7 +634,7 @@ def travel_explore_search(args: dict[str, Any], **kwargs: Any) -> str:
                 "travel_class": travel_class,
                 **_passengers(args, include_infants=True),
                 "currency": _currency(args),
-                "hl": _code(args, "language"),
+                "hl": _language(args),
                 "gl": _code(args, "country"),
                 "stops": stops,
                 "max_price": maximum_price,

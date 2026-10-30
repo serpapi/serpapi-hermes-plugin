@@ -6,6 +6,17 @@ from typing import Any
 import pytest
 
 
+def test_invalid_language_fails_before_request(tools_module, monkeypatch):
+    def unexpected_call(*args):
+        pytest.fail("Invalid language must not make a request")
+
+    monkeypatch.setattr(tools_module, "call_serpapi", unexpected_call)
+
+    response = json.loads(tools_module.news_search({"query": "news", "language": "en_US"}))
+    assert response["success"] is False
+    assert "language" in response["error"]
+
+
 def test_maps_search_routes_parameters_and_normalizes_json_results(
     tools_module, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -37,7 +48,7 @@ def test_maps_search_routes_parameters_and_normalizes_json_results(
                 "query": "pizza",
                 "location": "New York, NY",
                 "nearby": True,
-                "language": "en",
+                "language": " EN-GB ",
                 "country": "us",
                 "output": "json",
             }
@@ -49,7 +60,7 @@ def test_maps_search_routes_parameters_and_normalizes_json_results(
         "params": {
             "q": "pizza",
             "type": "search",
-            "hl": "en",
+            "hl": "en-gb",
             "gl": "us",
             "location": "New York, NY",
             "z": 14,
@@ -112,6 +123,7 @@ def test_news_search_routes_and_normalizes_json_results(
                 "query": "reusable rockets",
                 "location": "Florida",
                 "country": "us",
+                "language": "es-419",
                 "output": "json",
             }
         )
@@ -122,7 +134,7 @@ def test_news_search_routes_and_normalizes_json_results(
         "params": {
             "q": "reusable rockets",
             "location": "Florida",
-            "hl": None,
+            "hl": "es-419",
             "gl": "us",
             "output": "json",
         },
@@ -173,6 +185,7 @@ def test_shopping_search_routes_filters_and_normalizes_json_results(
                 "sort": "price_low_to_high",
                 "free_shipping": True,
                 "country": "us",
+                "language": "fil",
                 "output": "json",
             }
         )
@@ -183,7 +196,7 @@ def test_shopping_search_routes_filters_and_normalizes_json_results(
         "params": {
             "q": "laptop",
             "location": "",
-            "hl": None,
+            "hl": "fil",
             "gl": "us",
             "min_price": 500,
             "max_price": 1200,

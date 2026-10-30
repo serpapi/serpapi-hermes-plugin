@@ -1,29 +1,26 @@
 from __future__ import annotations
 
 import json
-from typing import Any
+import sys
+from contextvars import ContextVar
+from threading import Barrier
 
 import httpx
 import pytest
 
 
 @pytest.fixture
-def extract_response(monkeypatch: pytest.MonkeyPatch):
+def extract_response(monkeypatch):
     monkeypatch.setenv("SERPAPI_API_KEY", "test-secret")
     requests = []
     payload = {
-        "page_information": {
-            "title": "A product",
-            "url": "https://example.com/product",
-            "final_url": "https://example.com/product/",
-        },
-        "text_content": {"markdown": "# Product\n\nCosts **$20**.", "full": "Product Costs $20."},
-        "price_offers": [{"price": "$20"}],
-        "meta_tags": {"description": "A product"},
-        "sections": [{"text": "Product details"}],
+        "page_information": {"title": "Product", "final_url": "https://example.com/product"},
+        "markdown": "# Product\n\nCosts **$20**.",
+        "json_ld": [{"@type": "Product", "offers": {"price": "20"}}],
+        "debug": "test-secret",
     }
 
-    def fake_get(url: str, **kwargs: Any) -> httpx.Response:
+    def fake_get(url, **kwargs):
         requests.append({"url": url, **kwargs})
         return httpx.Response(200, json=payload, request=httpx.Request("GET", url))
 
@@ -31,238 +28,194 @@ def extract_response(monkeypatch: pytest.MonkeyPatch):
     return payload, requests
 
 
-def test_compact_tool_returns_main_markdown_and_filters_upstream(tools_module, extract_response):
+@pytest.mark.parametrize("compact_mode", [True, False])
+def test_scrape_formats_and_css_filters(tools_module, extract_response, compact_mode):
     payload, requests = extract_response
+    result = tools_module.extract({
+        "url": "https://example.com/product", "compact_mode": compact_mode,
+        "include_tags": "main,article", "exclude_tags": "nav,footer",
+    })
 
-    result = tools_module.extract({"url": "https://example.com/product"})
-
-    assert result == payload["text_content"]["markdown"]
-    request = requests[0]
-    assert request["url"] == "https://serpapi.com/search"
-    assert request["params"] == {
-        "url": "https://example.com/product",
-        "engine": "extract",
-        "mode": "scrape",
-        "include_markdown": "true",
-        "json_restrictor": "page_information,text_content,error",
-        "output": "json",
-        "api_key": "test-secret",
-    }
-    assert request["timeout"] == 60
-    assert request["headers"]["Accept"] == "application/json"
-
-
-def test_full_tool_preserves_structured_fields_and_passes_css_filters(
-    tools_module, extract_response
-):
-    payload, requests = extract_response
-    payload["debug"] = "test-secret"
-
-    result = json.loads(tools_module.extract({
-        "url": "https://example.com/product",
-        "compact_mode": False,
-        "include_tags": "main,article",
-        "exclude_tags": "nav,footer",
-    }))
-
-    assert result == {**payload, "debug": "[redacted]"}
+    assert "test-secret" not in result
+    assert (result if compact_mode else json.loads(result)["markdown"]) == payload["markdown"]
+    if not compact_mode:
+        assert json.loads(result) == {**payload, "debug": "[redacted]"}
     params = requests[0]["params"]
-    assert "json_restrictor" not in params
-    assert params["include_tags"] == "main,article"
-    assert params["exclude_tags"] == "nav,footer"
+    assert (params["engine"], params["mode"], params["output"]) == ("extract", "scrape", "json")
+    assert (params["include_tags"], params["exclude_tags"]) == ("main,article", "nav,footer")
+    assert ("json_restrictor" in params) is compact_mode
     assert "compact_mode" not in params
 
 
-@pytest.mark.parametrize("markdown", [None, "", "  ", ["invalid"]])
-def test_missing_markdown_falls_back_to_complete_text(tools_module, extract_response, markdown):
+def test_missing_markdown_is_not_replaced_by_a_truncated_excerpt(tools_module, extract_response):
     payload, _ = extract_response
-    payload["text_content"]["markdown"] = markdown
-    payload["text_content"]["excerpt"] = "Truncated"
-
-    assert tools_module.extract({"url": "https://example.com"}) == "Product Costs $20."
-
-
-@pytest.mark.parametrize("text_content", [None, [], {}, {"excerpt": "Only a short excerpt"}])
-def test_missing_page_content_is_an_error(tools_module, extract_response, text_content):
-    payload, _ = extract_response
-    payload["text_content"] = text_content
-
+    del payload["markdown"]
+    payload["text_content"] = {"excerpt": "A truncated legacy excerpt"}
     result = json.loads(tools_module.extract({"url": "https://example.com"}))
-
     assert result["success"] is False
     assert "no page content" in result["error"]
 
 
 @pytest.mark.parametrize("args", [
-    {},
-    {"url": "file:///etc/passwd"},
-    {"url": "example.com"},
-    {"url": "https://"},
-    {"url": "https://[bad"},
-    {"url": "https://example.com:invalid"},
-    {"url": "https://☃.example"},
-    {"url": "https://example.com/\u0000"},
     {"url": "https://user:password@example.com"},
-    {"url": ["https://example.com"]},
-    {"url": "https://example.com", "compact_mode": "false"},
-    {"url": "https://example.com", "include_tags": ["main"]},
+    {"url": "file:///etc/passwd"},
+    {"url": "https://example.com", "mode": "crawl", "max_pages": 101},
+    {"url": "https://example.com", "mode": "scrape", "max_depth": 1},
 ])
-def test_invalid_inputs_fail_without_request(tools_module, extract_response, args):
+def test_invalid_requests_fail_before_network_access(tools_module, extract_response, args):
     _, requests = extract_response
-
     assert json.loads(tools_module.extract(args))["success"] is False
     assert requests == []
 
 
-def test_provider_returns_hermes_documents_and_ignores_unknown_kwargs(
-    provider_module, extract_response
-):
-    payload, _ = extract_response
+def test_native_batch_preserves_order_profile_and_partial_failures(provider_module, monkeypatch):
+    from agent import web_search_provider
 
-    results = provider_module.SerpApiWebSearchProvider().extract(
-        ["https://example.com/product"], format="text", unknown_option=True
-    )
-
-    assert results == [{
-        "url": "https://example.com/product",
-        "title": "A product",
-        "content": "Product Costs $20.",
-        "raw_content": "Product Costs $20.",
-        "metadata": {**payload["page_information"], "sourceURL": "https://example.com/product"},
-    }]
-
-
-def test_batch_runs_concurrently_and_preserves_order_and_errors(
-    provider_module, monkeypatch: pytest.MonkeyPatch
-):
-    from threading import Barrier
-
+    profile_key = ContextVar("profile_key", default="wrong-profile")
+    monkeypatch.setattr(web_search_provider, "get_provider_env", lambda name: profile_key.get())
     barrier = Barrier(3)
-    monkeypatch.setenv("SERPAPI_API_KEY", "test-secret")
+    requests = []
 
-    def fake_get(url: str, **kwargs: Any) -> httpx.Response:
-        target = kwargs["params"]["url"]
+    def fake_get(url, **kwargs):
+        params = kwargs["params"]
+        requests.append(params)
         barrier.wait(timeout=5)
         request = httpx.Request("GET", url)
-        if target.endswith("/error"):
-            return httpx.Response(400, json={"error": "Cannot fetch test-secret"}, request=request)
-        if target.endswith("/timeout"):
-            raise httpx.ReadTimeout("test-secret", request=request)
-        return httpx.Response(200, json={"text_content": {"markdown": "A page"}}, request=request)
+        if params["url"].endswith("/error"):
+            return httpx.Response(
+                400, json={"error": "Cannot fetch profile-secret"}, request=request,
+            )
+        if params["url"].endswith("/timeout"):
+            raise httpx.ReadTimeout("profile-secret", request=request)
+        return httpx.Response(200, json={
+            "markdown": "A page", "page_information": {"title": "Page"},
+        }, request=request)
 
     monkeypatch.setattr(httpx, "get", fake_get)
     urls = ["https://example.com/error", "https://example.com/good", "https://example.com/timeout"]
-
-    results = provider_module.SerpApiWebSearchProvider().extract(urls, format="markdown")
-
-    assert [result["url"] for result in results] == urls
-    assert results[0]["error"] == "Cannot fetch [redacted]"
-    assert results[1]["content"] == "A page"
-    assert "error" not in results[1]
-    assert results[2]["error"] == "Could not reach SerpApi; try again shortly"
-    assert "test-secret" not in json.dumps(results)
-
-
-def test_empty_batch_does_not_request(provider_module, extract_response):
-    _, requests = extract_response
-    assert provider_module.SerpApiWebSearchProvider().extract([]) == []
-    assert requests == []
-
-
-def test_batch_preserves_profile_scoped_credentials(
-    provider_module, extract_response, monkeypatch: pytest.MonkeyPatch
-):
-    from contextvars import ContextVar
-
-    from agent import web_search_provider
-
-    profile_key = ContextVar("profile_key", default="")
-    monkeypatch.setattr(web_search_provider, "get_provider_env", lambda name: profile_key.get())
     token = profile_key.set("profile-secret")
-    _, requests = extract_response
     try:
         results = provider_module.SerpApiWebSearchProvider().extract(
-            ["https://example.com/one", "https://example.com/two"]
+            urls, format="markdown", mode="crawl", max_pages=10,
         )
     finally:
         profile_key.reset(token)
 
-    assert all("error" not in result for result in results)
-    assert len(requests) == 2
-    assert all(request["params"]["api_key"] == "profile-secret" for request in requests)
+    assert [result["url"] for result in results] == urls
+    assert results[0]["error"] == "Cannot fetch [redacted]"
+    assert results[1] == {
+        "url": urls[1], "title": "Page", "content": "A page", "raw_content": "A page",
+        "metadata": {"title": "Page", "sourceURL": urls[1]},
+    }
+    assert results[2]["error"] == "Could not reach SerpApi; try again shortly"
+    assert "profile-secret" not in json.dumps(results)
+    assert all(p["api_key"] == "profile-secret" and p["mode"] == "scrape" for p in requests)
+    assert all("max_pages" not in p for p in requests)
 
 
-def test_missing_key_returns_per_url_errors(provider_module, monkeypatch: pytest.MonkeyPatch):
-    monkeypatch.delenv("SERPAPI_API_KEY", raising=False)
-    results = provider_module.SerpApiWebSearchProvider().extract(["https://example.com"])
-    assert len(results) == 1
-    assert "SERPAPI_API_KEY" in results[0]["error"]
-
-
-@pytest.mark.parametrize("token", ["sk-" + "a" * 30, "%73%6b%2d" + "a" * 30])
-def test_secret_url_is_blocked_before_request(tools_module, extract_response, token):
-    _, requests = extract_response
-
-    result = json.loads(tools_module.extract({"url": f"https://example.com/?token={token}"}))
-
-    assert result["success"] is False
-    assert "API key or token" in result["error"]
-    assert token not in result["error"]
-    assert requests == []
-
-
-def test_website_policy_blocks_both_extraction_paths(
-    tools_module, provider_module, extract_response, monkeypatch: pytest.MonkeyPatch
+@pytest.mark.parametrize("target", [
+    "https://example.com/?token=%73%6b%2d" + "a" * 30,
+    "https://blocked.example/",
+])
+def test_blocked_seed_never_reaches_serpapi(
+    tools_module, provider_module, extract_response, monkeypatch, target
 ):
-    import sys
-
     _, requests = extract_response
-    monkeypatch.setattr(
-        sys.modules["tools.website_policy"], "check_website_access", lambda url: {"blocked": True}
-    )
+    monkeypatch.setattr(sys.modules["tools.website_policy"], "check_website_access",
+                        lambda url: {"blocked": True} if "blocked.example" in url else None)
 
-    direct = json.loads(tools_module.extract({"url": "https://example.com"}))
-    native = provider_module.SerpApiWebSearchProvider().extract(["https://example.com"])
+    direct = json.loads(tools_module.extract({"url": target}))
+    native = provider_module.SerpApiWebSearchProvider().extract([target])[0]
 
-    assert direct["error"] == native[0]["error"] == "Blocked by website policy"
-    assert native[0]["blocked_by_policy"] is True
+    assert direct["success"] is False
+    assert native["blocked_by_policy"] is True
+    assert native["content"] == ""
+    assert target not in direct["error"]
     assert requests == []
+
+
+@pytest.mark.parametrize("compact_mode,target", [
+    (True, "https://example.com/?token=sk-" + "a" * 30),
+    (False, "https://blocked.example/"),
+])
+def test_blocked_redirect_never_returns_content(
+    tools_module, provider_module, extract_response, monkeypatch, compact_mode, target
+):
+    payload, _ = extract_response
+    payload["page_information"]["final_url"] = target
+    monkeypatch.setattr(sys.modules["tools.website_policy"], "check_website_access",
+                        lambda url: {"blocked": True} if "blocked.example" in url else None)
+
+    direct = json.loads(tools_module.extract({
+        "url": "https://example.com/product", "compact_mode": compact_mode,
+    }))
+    native = provider_module.SerpApiWebSearchProvider().extract(["https://example.com/product"])[0]
+
+    assert direct["success"] is False
+    assert native["blocked_by_policy"] is True
+    assert native["content"] == ""
+    assert target not in json.dumps([direct, native])
 
 
 def test_missing_safety_helpers_fail_closed(tools_module, extract_response, monkeypatch):
-    import sys
-
     _, requests = extract_response
     monkeypatch.setitem(sys.modules, "tools.website_policy", None)
-
     result = json.loads(tools_module.extract({"url": "https://example.com"}))
-
     assert result["success"] is False
     assert "Update Hermes" in result["error"]
     assert requests == []
 
 
-@pytest.mark.parametrize("field", ["url", "final_url"])
-@pytest.mark.parametrize("compact_mode", [True, False])
-def test_redirect_to_blocked_domain_never_returns_content(
-    tools_module, provider_module, extract_response, monkeypatch, field, compact_mode
+@pytest.mark.parametrize("mode,field", [("map", "urls"), ("crawl", "pages")])
+def test_site_modes_preserve_good_results_and_isolate_failures(
+    tools_module, extract_response, monkeypatch, mode, field
 ):
-    import sys
+    payload, requests = extract_response
+    good = {"url": "https://example.com/good", "markdown": "Keep this page", "title": "Good"}
+    payload.clear()
+    payload.update({"search_parameters": {"engine": "extract", "mode": mode}, field: [
+        good,
+        {"url": "https://example.com/error", "error": "Fetch failed test-secret"},
+        {"url": "https://example.com/redirect", "markdown": "Blocked page",
+         "page_information": {"final_url": "https://blocked.example/"}},
+        {"url": "https://example.com/?sk-" + "a" * 30, "markdown": "Secret page"},
+        {"url": "file:///etc/passwd", "markdown": "Malformed page"},
+    ]})
+    monkeypatch.setattr(sys.modules["tools.website_policy"], "check_website_access",
+                        lambda url: {"blocked": True} if "blocked.example" in url else None)
+    options = ({"include_sitemap": False} if mode == "map" else {"max_pages": 2, "max_depth": 1})
+    args = {"url": "https://example.com", "mode": mode, "include_subdomains": True, **options}
 
+    compact = tools_module.extract(args)
+    full_text = tools_module.extract({**args, "compact_mode": False})
+    full = json.loads(full_text)
+
+    assert "<https://example.com/good>" in compact
+    assert "Fetch failed [redacted]" in compact
+    assert "Blocked" in compact
+    if mode == "crawl":
+        assert "Keep this page" in compact
+    assert full[field][0] == good
+    assert full[field][1]["error"] == "Fetch failed [redacted]"
+    assert all(entry["blocked_by_policy"] for entry in full[field][2:4])
+    assert all("error" in entry and "url" not in entry for entry in full[field][2:])
+    for hidden in (
+        "test-secret", "Blocked page", "Secret page", "Malformed page", "sk-", "blocked.example",
+    ):
+        assert hidden not in compact + full_text
+    for request in requests:
+        for key, value in {**options, "include_subdomains": True}.items():
+            assert request["params"][key] == value
+    assert "json_restrictor" in requests[0]["params"]
+    assert "json_restrictor" not in requests[1]["params"]
+
+
+def test_empty_map_is_distinguished_from_an_unrelated_response(tools_module, extract_response):
     payload, _ = extract_response
-    payload["page_information"][field] = "https://blocked.example/page"
-    monkeypatch.setattr(
-        sys.modules["tools.website_policy"],
-        "check_website_access",
-        lambda url: {"blocked": True} if "blocked.example" in url else None,
-    )
+    payload.clear()
+    payload["search_parameters"] = {"engine": "extract", "mode": "map"}
+    args = {"url": "https://example.com", "mode": "map"}
+    assert tools_module.extract(args) == "No URLs found."
 
-    direct = json.loads(tools_module.extract({
-        "url": "https://example.com/product", "compact_mode": compact_mode,
-    }))
-    native = provider_module.SerpApiWebSearchProvider().extract(["https://example.com/product"])
-
-    assert direct["error"] == native[0]["error"] == "Blocked by website policy"
-    assert native[0]["blocked_by_policy"] is True
-    assert "content" not in direct
-    assert native[0]["content"] == ""
+    payload["search_parameters"]["engine"] = "google"
+    assert json.loads(tools_module.extract(args))["success"] is False

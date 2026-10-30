@@ -1,6 +1,6 @@
 name: serpapi
 version: 1.1.1
-description: "SerpApi search and page extraction for Hermes Agent."
+description: "SerpApi search, page scraping, site mapping, and crawling for Hermes Agent."
 author: SerpApi
 license: MIT
 homepage: https://github.com/serpapi/serpapi-hermes-plugin

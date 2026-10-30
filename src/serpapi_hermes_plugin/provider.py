@@ -53,7 +53,7 @@ class SerpApiWebSearchProvider(WebSearchProvider):
             }
             try:
                 payload = extract_page(url)
-                content = page_content(payload, format=kwargs.get("format"))
+                content = page_content(payload)
                 page = payload.get("page_information")
                 if not isinstance(page, dict):
                     page = {}
@@ -91,7 +91,6 @@ class SerpApiWebSearchProvider(WebSearchProvider):
                 _ENGINE,
                 {
                     "q": query,
-                    "num": result_limit,
                     "output": "json",
                 },
             )

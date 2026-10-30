@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import os
 from datetime import date, timedelta
 from typing import Any
@@ -85,7 +86,7 @@ def test_live_web_search_returns_real_hermes_results(provider_module) -> None:
 
 
 def test_live_extract_returns_hermes_documents(provider_module) -> None:
-    urls = ["https://www.python.org/about/", "https://example.com/"]
+    urls = ["https://www.python.org/about/"]
     results = provider_module.SerpApiWebSearchProvider().extract(urls, format="markdown")
 
     assert [result["url"] for result in results] == urls
@@ -97,23 +98,45 @@ def test_live_extract_returns_hermes_documents(provider_module) -> None:
         assert result["metadata"]["sourceURL"] == result["url"]
 
 
-def test_live_extract_compact_and_full(tools_module) -> None:
-    import json
-
-    args = {"url": "https://www.python.org/about/"}
+@pytest.mark.parametrize("mode", ["scrape", "map", "crawl"])
+def test_live_extract_modes_compact_and_full(tools_module, mode) -> None:
+    args = {
+        "url": "https://books.toscrape.com/catalogue/category/books/travel_2/index.html",
+        "mode": mode,
+    }
+    if mode == "scrape":
+        args.update({
+            "url": "https://books.toscrape.com/catalogue/a-light-in-the-attic_1000/index.html",
+            "include_tags": ".product_main", "exclude_tags": "form",
+        })
+    elif mode == "map":
+        args["include_sitemap"] = False
+    else:
+        args.update({"max_pages": 2, "max_depth": 1})
     compact = tools_module.extract(args)
     full = json.loads(tools_module.extract({**args, "compact_mode": False}))
 
     assert "error" not in full, full.get("error")
-    assert "Python" in compact
-    assert compact == full["text_content"]["markdown"].strip()
-    assert full["page_information"]["title"].strip()
-    assert full["meta_tags"]
-    assert full["sections"]
-    assert len(compact) < len(json.dumps(full))
+    if mode == "scrape":
+        assert compact == full["markdown"].strip()
+        assert "# A Light in the Attic" in compact
+        assert "£51.77" in compact
+        assert "Add to basket" not in compact
+        assert full["page_information"]["title"].strip()
+    else:
+        entries = full["urls" if mode == "map" else "pages"]
+        assert entries
+        for entry in entries:
+            _assert_http_url(entry["url"])
+            assert f"<{entry['url']}>" in compact
+        if mode == "crawl":
+            assert len(entries) == 2
+            assert {page["depth"] for page in entries} == {0, 1}
+            assert all(page["markdown"].strip() in compact for page in entries)
 
 
-def test_live_maps_search_returns_real_places(tools_module) -> None:
+@pytest.mark.parametrize("output", ["md", "json"])
+def test_live_maps_search_returns_real_places(tools_module, output) -> None:
     limit = 3
     response = tools_module.maps_search(
         {
@@ -121,12 +144,20 @@ def test_live_maps_search_returns_real_places(tools_module) -> None:
             "location": "Austin, Texas, United States",
             "country": "us",
             "limit": limit,
+            "output": output,
+            "language": "en-gb",
         }
     )
 
-    _assert_markdown(response)
-    assert _markdown_result_count(response, "Local Results") == limit
-    assert "coffee" in response.lower()
+    if output == "md":
+        _assert_markdown(response)
+        assert _markdown_result_count(response, "Local Results") == limit
+        assert "coffee" in response.lower()
+    else:
+        data = json.loads(response)
+        assert data["success"] is True, data
+        assert data["results_count"] == len(data["results"]) == limit
+        assert all(result["title"] and result.get("coordinates") for result in data["results"])
 
 
 def test_live_news_search_returns_real_articles(tools_module) -> None:
@@ -134,7 +165,8 @@ def test_live_news_search_returns_real_articles(tools_module) -> None:
     response = tools_module.news_search(
         {
             "query": "technology",
-            "country": "us",
+            "country": "mx",
+            "language": "es-419",
             "limit": limit,
         }
     )
@@ -159,7 +191,7 @@ def test_live_shopping_search_returns_real_products(tools_module) -> None:
     assert "headphones" in response.lower()
 
 
-def test_live_hotels_search_returns_markdown_properties(tools_module) -> None:
+def test_live_hotels_search_returns_properties(tools_module) -> None:
     check_in = date.today() + timedelta(days=60)
     response = tools_module.hotels_search(
         {
@@ -174,10 +206,11 @@ def test_live_hotels_search_returns_markdown_properties(tools_module) -> None:
     )
 
     _assert_markdown(response)
+    assert _markdown_result_count(response, "Properties") > 0
     assert "bali" in response.lower()
 
 
-def test_live_flights_search_returns_markdown_itineraries(tools_module) -> None:
+def test_live_flights_search_returns_itineraries(tools_module) -> None:
     outbound = date.today() + timedelta(days=60)
     response = tools_module.flights_search(
         {
@@ -192,11 +225,13 @@ def test_live_flights_search_returns_markdown_itineraries(tools_module) -> None:
     )
 
     _assert_markdown(response)
+    assert (_markdown_result_count(response, "Best Flights")
+            + _markdown_result_count(response, "Other Flights")) > 0
     assert "JFK" in response
     assert "LAX" in response
 
 
-def test_live_travel_explore_returns_markdown_destinations(tools_module) -> None:
+def test_live_travel_explore_returns_destinations(tools_module) -> None:
     response = tools_module.travel_explore_search(
         {
             "departure_id": "JFK",
@@ -206,4 +241,15 @@ def test_live_travel_explore_returns_markdown_destinations(tools_module) -> None
     )
 
     _assert_markdown(response)
+    assert _markdown_result_count(response, "Destinations") > 0
     assert "JFK" in response
+
+
+@pytest.mark.parametrize("output", ["md", "json"])
+def test_live_empty_search_returns_consistent_error(tools_module, output) -> None:
+    response = json.loads(tools_module.news_search({
+        "query": '"hermes-serpapi-no-results-20261029-zxqv-746291"',
+        "country": "us", "output": output,
+    }))
+    assert response["success"] is False
+    assert "hasn't returned any results" in response["error"]

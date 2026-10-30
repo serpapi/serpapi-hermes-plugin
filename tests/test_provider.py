@@ -88,7 +88,6 @@ def test_search_maps_google_light_results(provider_module, monkeypatch: pytest.M
     assert captured["params"] == {
         "engine": "google_light",
         "q": "Hermes Agent",
-        "num": 2,
         "api_key": "test-key",
         "output": "json",
     }

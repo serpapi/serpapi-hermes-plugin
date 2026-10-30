@@ -9,6 +9,30 @@ from markdown_it import MarkdownIt
 _PARSER = MarkdownIt("commonmark").enable("table")
 
 
+def response_error(markdown: str) -> str | None:
+    """Read an API error section from a search response, excluding page content."""
+    markdown = markdown.removeprefix("\ufeff").replace("\r\n", "\n")
+    if not markdown.startswith("---\n"):
+        return None
+    tokens = _PARSER.parse(markdown)
+    lines = markdown.splitlines()
+    start: int | None = None
+    for index, token in enumerate(tokens):
+        if token.type != "heading_open" or token.level != 0 or token.map is None:
+            continue
+        if start is not None and int(token.tag[1:]) <= 2:
+            return "\n".join(lines[start:token.map[0]]).strip() or "Unknown SerpApi error"
+        if (
+            token.tag == "h2"
+            and token.markup == "##"
+            and tokens[index + 1].content.strip().casefold() == "error"
+        ):
+            start = token.map[1]
+    if start is not None:
+        return "\n".join(lines[start:]).strip() or "Unknown SerpApi error"
+    return None
+
+
 def _normalized_heading(value: str) -> str:
     return re.sub(r"[^a-z0-9]+", " ", value.casefold()).strip()
 

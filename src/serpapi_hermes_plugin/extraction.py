@@ -4,39 +4,29 @@ from __future__ import annotations
 
 import json
 from typing import Any
-from urllib.parse import unquote, urlsplit
+from urllib.parse import urlsplit
 
 import httpx
 
 from .client import SerpApiError, call_serpapi
 
 
-class WebsitePolicyError(SerpApiError):
-    """An intentional website-policy refusal that Hermes must not retry elsewhere."""
+class UnsafeUrlError(SerpApiError):
+    """An extraction target failed URL validation or the host's network guard."""
 
 
-def _check_url_policy(url: str) -> None:
-    """Apply Hermes's URL, secret and website checks to seeds and returned targets."""
-    try:
-        from agent.redact import _PREFIX_RE
-        from tools.url_safety import is_safe_url
-        from tools.website_policy import check_website_access
-    except ImportError:
-        raise SerpApiError(
-            "Update Hermes to a version with URL safety and website policy support"
-        ) from None
-
+def _check_url_safety(url: str) -> None:
+    """Validate seeds and returned targets using Hermes's public network guard."""
     try:
         normalized_url = _normalize_url(url)
     except ValueError:
-        raise WebsitePolicyError("Blocked: invalid extraction URL") from None
-    candidates = (url, unquote(url), normalized_url, unquote(normalized_url))
-    if any(_PREFIX_RE.search(candidate) for candidate in candidates):
-        raise WebsitePolicyError("Blocked: URL contains what appears to be an API key or token")
-    if check_website_access(url) or check_website_access(normalized_url):
-        raise WebsitePolicyError("Blocked by website policy")
+        raise UnsafeUrlError("Blocked: invalid extraction URL") from None
+    try:
+        from tools.url_safety import is_safe_url
+    except ImportError:
+        raise SerpApiError("Update Hermes to a version with URL safety support") from None
     if not is_safe_url(normalized_url):
-        raise WebsitePolicyError("Blocked: URL targets a private, internal, or unresolved address")
+        raise UnsafeUrlError("Blocked: URL targets a private, internal, or unresolved address")
 
 
 def _normalize_url(url: str) -> str:
@@ -113,7 +103,7 @@ def extract_page(
             params[name] = value.strip()
     # Extract can route any supported search URL to a dedicated engine. Filter
     # locally so an ordinary-page field allowlist cannot discard that engine's results.
-    _check_url_policy(url)
+    _check_url_safety(url)
 
     payload = call_serpapi("extract", params)
     if not isinstance(payload, dict):
@@ -143,7 +133,7 @@ def extract_page(
             except SerpApiError as exc:
                 # Keep other results without exposing the refused URL or page content.
                 failure: dict[str, Any] = {"error": str(exc)}
-                if isinstance(exc, WebsitePolicyError):
+                if isinstance(exc, UnsafeUrlError):
                     failure["blocked_by_policy"] = True
                 checked_entries.append(failure)
             else:
@@ -167,7 +157,7 @@ def _check_entry_urls(entry: Any, mode: str) -> None:
     if not isinstance(entry, dict) or not isinstance(entry.get("url"), str):
         raise SerpApiError(f"SerpApi returned an unexpected {mode} entry")
     target = entry["url"]
-    _check_url_policy(target)
+    _check_url_safety(target)
     _check_page_urls(entry)
 
 
@@ -178,12 +168,12 @@ def _check_page_urls(payload: dict[str, Any]) -> None:
         for field in ("url", "final_url"):
             target = page.get(field)
             if isinstance(target, str) and target:
-                _check_url_policy(target)
+                _check_url_safety(target)
     metadata = payload.get("search_metadata")
     if isinstance(metadata, dict):
         for field, target in metadata.items():
             if field.endswith("_url") and isinstance(target, str) and target:
-                _check_url_policy(target)
+                _check_url_safety(target)
 
 
 def _routed_engine(payload: dict[str, Any]) -> str | None:

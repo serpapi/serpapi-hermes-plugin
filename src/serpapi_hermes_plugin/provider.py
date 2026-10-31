@@ -10,7 +10,7 @@ from typing import Any
 from agent.web_search_provider import WebSearchProvider
 
 from .client import API_KEY_ENV, SerpApiError, call_serpapi, is_configured
-from .extraction import WebsitePolicyError, extract_page, page_content
+from .extraction import UnsafeUrlError, extract_page, page_content
 
 logger = logging.getLogger(__name__)
 
@@ -65,7 +65,7 @@ class SerpApiWebSearchProvider(WebSearchProvider):
                 )
             except (ValueError, SerpApiError) as exc:
                 document["error"] = str(exc)
-                if isinstance(exc, WebsitePolicyError):
+                if isinstance(exc, UnsafeUrlError):
                     document["blocked_by_policy"] = True
             return document
 

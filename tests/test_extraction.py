@@ -99,6 +99,8 @@ def test_routed_engines_preserve_results_in_compact_full_and_provider(
 @pytest.mark.parametrize("args", [
     {"url": "https://user:password@example.com"},
     {"url": "file:///etc/passwd"},
+    {"url": "https://"},
+    {"url": "https://example.com:invalid/"},
     {"url": "https://example.com", "mode": "crawl", "max_pages": 101},
     {"url": "https://example.com", "mode": "scrape", "max_depth": 1},
 ])
@@ -153,17 +155,11 @@ def test_native_batch_preserves_order_profile_and_partial_failures(provider_modu
     assert all("max_pages" not in p for p in requests)
 
 
-@pytest.mark.parametrize("target", [
-    "https://example.com/?token=%73%6b%2d" + "a" * 30,
-    "https://blocked.example/",
-    "http://127.0.0.1/",
-])
-def test_blocked_seed_never_reaches_serpapi(
-    tools_module, provider_module, extract_response, monkeypatch, target
+def test_private_seed_never_reaches_serpapi(
+    tools_module, provider_module, extract_response, monkeypatch
 ):
     _, requests = extract_response
-    monkeypatch.setattr(sys.modules["tools.website_policy"], "check_website_access",
-                        lambda url: {"blocked": True} if "blocked.example" in url else None)
+    target = "http://127.0.0.1/"
     monkeypatch.setattr(sys.modules["tools.url_safety"], "is_safe_url",
                         lambda url: "127.0.0.1" not in url)
 
@@ -177,18 +173,13 @@ def test_blocked_seed_never_reaches_serpapi(
     assert requests == []
 
 
-@pytest.mark.parametrize("compact_mode,target", [
-    (True, "https://example.com/?token=sk-" + "a" * 30),
-    (False, "https://blocked.example/"),
-    (True, "http://[::1]/"),
-])
-def test_blocked_redirect_never_returns_content(
-    tools_module, provider_module, extract_response, monkeypatch, compact_mode, target
+@pytest.mark.parametrize("compact_mode", [True, False])
+def test_private_redirect_never_returns_content(
+    tools_module, provider_module, extract_response, monkeypatch, compact_mode
 ):
     payload, _ = extract_response
+    target = "http://[::1]/"
     payload["page_information"]["final_url"] = target
-    monkeypatch.setattr(sys.modules["tools.website_policy"], "check_website_access",
-                        lambda url: {"blocked": True} if "blocked.example" in url else None)
     monkeypatch.setattr(sys.modules["tools.url_safety"], "is_safe_url",
                         lambda url: "[::1]" not in url)
 
@@ -205,11 +196,34 @@ def test_blocked_redirect_never_returns_content(
 
 def test_missing_safety_helpers_fail_closed(tools_module, extract_response, monkeypatch):
     _, requests = extract_response
-    monkeypatch.setitem(sys.modules, "tools.website_policy", None)
+    monkeypatch.setitem(sys.modules, "tools.url_safety", None)
     result = json.loads(tools_module.extract({"url": "https://example.com"}))
     assert result["success"] is False
     assert "Update Hermes" in result["error"]
     assert requests == []
+
+
+def test_query_parameters_pass_through_without_custom_policy_checks(
+    tools_module, extract_response, monkeypatch,
+):
+    from serpapi_hermes_plugin.provider import SerpApiWebSearchProvider
+
+    payload, requests = extract_response
+    monkeypatch.setitem(sys.modules, "agent.redact", None)
+    monkeypatch.setitem(sys.modules, "tools.website_policy", None)
+    monkeypatch.setitem(sys.modules, "hermes_cli.config", None)
+    url = (
+        "https://example.com/product?token=chapter1&signature=example-signature"
+        "&api_key=test-secret&q=ghp_" + "a" * 30
+    )
+    # Exercise both the requested URL and a returned URL with signed parameters.
+    payload["page_information"]["final_url"] = url
+    assert tools_module.extract({"url": url}) == payload["markdown"]
+    native = SerpApiWebSearchProvider().extract([url])[0]
+    assert "error" not in native
+    assert native["content"] == payload["markdown"]
+    assert len(requests) == 2
+    assert all(request["params"]["url"] == url for request in requests)
 
 
 @pytest.mark.parametrize("mode,field", [("map", "urls"), ("crawl", "pages")])
@@ -223,13 +237,10 @@ def test_site_modes_preserve_good_results_and_isolate_failures(
         good,
         {"url": "https://example.com/error", "error": "Fetch failed test-secret"},
         {"url": "https://example.com/redirect", "markdown": "Blocked page",
-         "page_information": {"final_url": "https://blocked.example/"}},
-        {"url": "https://example.com/?sk-" + "a" * 30, "markdown": "Secret page"},
+         "page_information": {"final_url": "http://10.0.0.1/"}},
         {"url": "file:///etc/passwd", "markdown": "Malformed page"},
         {"url": "http://10.0.0.1/", "markdown": "Private page"},
     ]})
-    monkeypatch.setattr(sys.modules["tools.website_policy"], "check_website_access",
-                        lambda url: {"blocked": True} if "blocked.example" in url else None)
     monkeypatch.setattr(sys.modules["tools.url_safety"], "is_safe_url",
                         lambda url: "10.0.0.1" not in url)
     options = ({"include_sitemap": False} if mode == "map" else {"max_pages": 2, "max_depth": 1})
@@ -246,10 +257,10 @@ def test_site_modes_preserve_good_results_and_isolate_failures(
         assert "Keep this page" in compact
     assert full[field][0] == good
     assert full[field][1]["error"] == "Fetch failed [redacted]"
-    assert all(entry["blocked_by_policy"] for entry in full[field][2:4])
+    assert all(entry["blocked_by_policy"] for entry in full[field][2:])
     assert all("error" in entry and "url" not in entry for entry in full[field][2:])
     for hidden in (
-        "test-secret", "Blocked page", "Secret page", "Malformed page", "sk-", "blocked.example",
+        "test-secret", "Blocked page", "Malformed page",
         "Private page", "10.0.0.1",
     ):
         assert hidden not in compact + full_text

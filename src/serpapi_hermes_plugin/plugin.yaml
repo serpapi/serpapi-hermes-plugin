@@ -1,7 +1,7 @@
 name: serpapi
 version: 1.2.0
 requires_hermes: ">=0.21.6"
-description: "SerpApi search, page scraping, site mapping, and crawling for Hermes Agent."
+description: "SerpApi web, Maps, News, Shopping, Hotels, Flights, Travel Explore, and page extraction for Hermes Agent. Scrape pages, map URLs, or crawl sites."
 author: SerpApi
 license: MIT
 homepage: https://github.com/serpapi/serpapi-hermes-plugin

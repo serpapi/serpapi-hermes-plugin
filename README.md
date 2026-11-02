@@ -5,15 +5,15 @@
 [![Python versions](https://img.shields.io/pypi/pyversions/serpapi-hermes-plugin.svg)](https://pypi.org/project/serpapi-hermes-plugin/)
 [![License: MIT](https://img.shields.io/pypi/l/serpapi-hermes-plugin.svg)](https://github.com/serpapi/serpapi-hermes-plugin/blob/main/LICENSE)
 
-Use [SerpApi](https://serpapi.com/) in [Hermes Agent](https://hermes-agent.nousresearch.com/) to search the web, places, news, shopping, hotels, flights, and destinations, and to read page content.
+Use [SerpApi](https://serpapi.com/) in [Hermes Agent](https://hermes-agent.nousresearch.com/) for web search, Maps, News, Shopping, Hotels, Flights, Travel Explore, and page extraction.
 
 Queries and requested URLs are sent to SerpApi using your API key. SerpApi fetches the requested pages; the plugin adds no telemetry.
 
-The plugin adds SerpApi search and extraction to Hermes:
+The plugin provides:
 
-- Hermes's built-in `web_search` uses the fast Google Light engine, and `web_extract` reads page content through the Extract API.
-- Dedicated Maps, News, Shopping, Hotels, Flights, and Travel Explore tools let Hermes choose the right SerpApi engine for each request.
-- Direct search tools return Markdown by default. `serpapi_extract` returns compact page content, with full structured JSON available through `compact_mode: false`.
+- Hermes's built-in `web_search` uses the fast Google Light engine.
+- Dedicated Maps, News, Shopping, Hotels, Flights, and Travel Explore tools let Hermes choose the right SerpApi engine. They return Markdown by default, with JSON available.
+- `web_extract` reads page content through SerpApi. `serpapi_extract` adds scraping, URL mapping, and crawling, with compact content or full JSON through `compact_mode: false`.
 
 ## Ask Hermes to install it
 

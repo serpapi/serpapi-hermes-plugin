@@ -73,7 +73,8 @@ def test_git_entry_point_uses_checkout_without_pypi_package(
         assert provider.name == "serpapi"
         assert provider.search("test")["data"]["web"][0]["url"] == "https://example.com"
         assert requests[0]["engine"] == "google_light"
-        assert len(context.tools) == 6
+        assert len(context.tools) == 7
+        assert provider.supports_extract() is True
         assert all(tool["check_fn"]() for tool in context.tools.values())
         assert all(
             tool["handler"].__module__.startswith(f"{module_name}.src.serpapi_hermes_plugin.")

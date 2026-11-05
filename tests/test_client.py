@@ -121,3 +121,37 @@ def test_http_400_without_json_uses_generic_error(
 
     with pytest.raises(client_module.SerpApiError, match=r"request failed \(HTTP 400\)"):
         client_module.call_serpapi("google_hotels", {"q": "Bali", "output": "md"})
+
+
+def test_http_200_markdown_error_is_bounded_and_redacted(client_module, monkeypatch):
+    monkeypatch.setenv("SERPAPI_API_KEY", "secret-key")
+    message = "No results for secret-key " + "x" * 600
+    body = "---\nsearch_metadata:\n  status: Success\n---\n\n## Error\n\n" + message
+    body += "\n\n## Pagination\n\nUnrelated next section"
+    body = "\ufeff" + body.replace("\n", "\r\n")
+    monkeypatch.setattr(httpx, "get", lambda url, **kw: httpx.Response(
+        200, text=body, headers={"content-type": "text/markdown"},
+        request=httpx.Request("GET", url),
+    ))
+
+    with pytest.raises(client_module.SerpApiError) as error:
+        client_module.call_serpapi("google_news_light", {"q": "no results"})
+
+    assert str(error.value) == message.replace("secret-key", "[redacted]")[:500]
+
+
+@pytest.mark.parametrize("engine, body", [
+    ("extract", "---\ntitle: Error handling\n---\n\n## Error\n\nAn article about errors."),
+    ("google_news_light", "---\nengine: google_news_light\n---\n\n"
+     "## News Results\n\n| Title |\n| --- |\n| Error |\n\n```\n## Error\n```"),
+])
+def test_markdown_content_is_not_mistaken_for_an_api_error(
+    client_module, monkeypatch, engine, body
+):
+    monkeypatch.setenv("SERPAPI_API_KEY", "secret-key")
+    monkeypatch.setattr(httpx, "get", lambda url, **kw: httpx.Response(
+        200, text=body, headers={"content-type": "text/markdown"},
+        request=httpx.Request("GET", url),
+    ))
+
+    assert client_module.call_serpapi(engine, {"output": "md"}) == body

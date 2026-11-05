@@ -31,6 +31,9 @@ def fake_hermes(monkeypatch: pytest.MonkeyPatch):
     agent_module.web_search_provider = web_search_provider_module
     monkeypatch.setitem(sys.modules, "agent", agent_module)
     monkeypatch.setitem(sys.modules, "agent.web_search_provider", web_search_provider_module)
+    safety_module = types.ModuleType("tools.url_safety")
+    safety_module.is_safe_url = lambda url: True
+    monkeypatch.setitem(sys.modules, "tools.url_safety", safety_module)
     return WebSearchProvider
 
 

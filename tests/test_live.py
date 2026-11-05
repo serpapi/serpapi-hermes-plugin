@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import os
 from datetime import date, timedelta
 from typing import Any
@@ -84,7 +85,101 @@ def test_live_web_search_returns_real_hermes_results(provider_module) -> None:
         assert isinstance(result["description"], str)
 
 
-def test_live_maps_search_returns_real_places(tools_module) -> None:
+def test_live_extract_returns_hermes_documents(provider_module) -> None:
+    urls = ["https://www.python.org/about/"]
+    results = provider_module.SerpApiWebSearchProvider().extract(urls, format="markdown")
+
+    assert [result["url"] for result in results] == urls
+    for result in results:
+        assert "error" not in result, result.get("error")
+        assert result["title"].strip()
+        assert result["content"].strip()
+        assert result["raw_content"] == result["content"]
+        assert result["metadata"]["sourceURL"] == result["url"]
+
+
+def test_live_extract_routes_search_urls(tools_module, provider_module) -> None:
+    url = "https://www.google.com/search?q=coffee"
+    compact = tools_module.extract({"url": url})
+    full = json.loads(tools_module.extract({"url": url, "compact_mode": False}))
+    document = provider_module.SerpApiWebSearchProvider().extract([url])[0]
+
+    assert "error" not in full, full.get("error")
+    assert full["search_parameters"]["engine"] == "google"
+    assert full["organic_results"]
+    assert "error" not in document, document.get("error")
+    for content in (compact, document["content"]):
+        data = json.loads(content.split("```json\n", 1)[1].rsplit("\n```", 1)[0])
+        assert data["organic_results"]
+        assert all(result["title"] and result["link"] for result in data["organic_results"])
+
+
+@pytest.mark.parametrize("mode", ["scrape", "map", "crawl"])
+def test_live_extract_modes_compact_and_full(tools_module, monkeypatch, mode) -> None:
+    responses = []
+    extract_page = tools_module.extract_page
+
+    def capture_response(*args, **kwargs):
+        payload = extract_page(*args, **kwargs)
+        responses.append(payload)
+        return payload
+
+    monkeypatch.setattr(tools_module, "extract_page", capture_response)
+    args = {
+        "url": "https://books.toscrape.com/catalogue/category/books/travel_2/index.html",
+        "mode": mode,
+    }
+    if mode == "scrape":
+        args.update({
+            "url": "https://books.toscrape.com/catalogue/a-light-in-the-attic_1000/index.html",
+            "include_tags": ".product_main", "exclude_tags": "form",
+        })
+    elif mode == "map":
+        args["include_sitemap"] = False
+    else:
+        args.update({"max_pages": 2, "max_depth": 1})
+    compact = tools_module.extract(args)
+    full = json.loads(tools_module.extract({**args, "compact_mode": False}))
+
+    assert "error" not in full, full.get("error")
+    assert len(responses) == 2, compact
+    # Separate live requests can return different page text or discovered URLs.
+    compact_payload = responses[0]
+    if mode == "scrape":
+        assert compact == compact_payload["markdown"].strip()
+        for content in (compact, full["markdown"]):
+            assert "# A Light in the Attic" in content
+            assert "£51.77" in content
+            assert "Add to basket" not in content
+        assert full["page_information"]["title"].strip()
+    else:
+        field = "urls" if mode == "map" else "pages"
+        for payload in (compact_payload, full):
+            entries = payload[field]
+            assert entries
+            for entry in entries:
+                _assert_http_url(entry["url"])
+                if payload is compact_payload:
+                    assert f"<{entry['url']}>" in compact
+                if entry.get("error"):
+                    assert mode == "crawl", entry["error"]
+                    if payload is compact_payload:
+                        assert f"Error: {entry['error']}" in compact
+                elif mode == "crawl":
+                    assert entry["markdown"].strip()
+                    if payload is compact_payload:
+                        assert entry["markdown"].strip() in compact
+            if mode == "crawl":
+                assert len(entries) == 2
+                assert {page["depth"] for page in entries} == {0, 1}
+                assert any(
+                    page["depth"] == 0 and page.get("markdown", "").strip()
+                    and not page.get("error") for page in entries
+                )
+
+
+@pytest.mark.parametrize("output", ["md", "json"])
+def test_live_maps_search_returns_real_places(tools_module, output) -> None:
     limit = 3
     response = tools_module.maps_search(
         {
@@ -92,12 +187,20 @@ def test_live_maps_search_returns_real_places(tools_module) -> None:
             "location": "Austin, Texas, United States",
             "country": "us",
             "limit": limit,
+            "output": output,
+            "language": "en-gb",
         }
     )
 
-    _assert_markdown(response)
-    assert _markdown_result_count(response, "Local Results") == limit
-    assert "coffee" in response.lower()
+    if output == "md":
+        _assert_markdown(response)
+        assert _markdown_result_count(response, "Local Results") == limit
+        assert "coffee" in response.lower()
+    else:
+        data = json.loads(response)
+        assert data["success"] is True, data
+        assert data["results_count"] == len(data["results"]) == limit
+        assert all(result["title"] and result.get("coordinates") for result in data["results"])
 
 
 def test_live_news_search_returns_real_articles(tools_module) -> None:
@@ -105,7 +208,8 @@ def test_live_news_search_returns_real_articles(tools_module) -> None:
     response = tools_module.news_search(
         {
             "query": "technology",
-            "country": "us",
+            "country": "mx",
+            "language": "es-419",
             "limit": limit,
         }
     )
@@ -130,7 +234,7 @@ def test_live_shopping_search_returns_real_products(tools_module) -> None:
     assert "headphones" in response.lower()
 
 
-def test_live_hotels_search_returns_markdown_properties(tools_module) -> None:
+def test_live_hotels_search_returns_properties(tools_module) -> None:
     check_in = date.today() + timedelta(days=60)
     response = tools_module.hotels_search(
         {
@@ -145,10 +249,11 @@ def test_live_hotels_search_returns_markdown_properties(tools_module) -> None:
     )
 
     _assert_markdown(response)
+    assert _markdown_result_count(response, "Properties") > 0
     assert "bali" in response.lower()
 
 
-def test_live_flights_search_returns_markdown_itineraries(tools_module) -> None:
+def test_live_flights_search_returns_itineraries(tools_module) -> None:
     outbound = date.today() + timedelta(days=60)
     response = tools_module.flights_search(
         {
@@ -163,11 +268,13 @@ def test_live_flights_search_returns_markdown_itineraries(tools_module) -> None:
     )
 
     _assert_markdown(response)
+    assert (_markdown_result_count(response, "Best Flights")
+            + _markdown_result_count(response, "Other Flights")) > 0
     assert "JFK" in response
     assert "LAX" in response
 
 
-def test_live_travel_explore_returns_markdown_destinations(tools_module) -> None:
+def test_live_travel_explore_returns_destinations(tools_module) -> None:
     response = tools_module.travel_explore_search(
         {
             "departure_id": "JFK",
@@ -177,4 +284,15 @@ def test_live_travel_explore_returns_markdown_destinations(tools_module) -> None
     )
 
     _assert_markdown(response)
+    assert _markdown_result_count(response, "Destinations") > 0
     assert "JFK" in response
+
+
+@pytest.mark.parametrize("output", ["md", "json"])
+def test_live_empty_search_returns_consistent_error(tools_module, output) -> None:
+    response = json.loads(tools_module.news_search({
+        "query": '"hermes-serpapi-no-results-20261029-zxqv-746291"',
+        "country": "us", "output": output,
+    }))
+    assert response["success"] is False
+    assert "hasn't returned any results" in response["error"]

@@ -8,11 +8,14 @@ from typing import Any
 
 import httpx
 
+from .markdown import response_error
+
 logger = logging.getLogger(__name__)
 
 API_KEY_ENV = "SERPAPI_API_KEY"
 ENDPOINT = "https://serpapi.com/search"
 TIMEOUT_SECONDS = 15.0
+EXTRACT_TIMEOUT_SECONDS = 60.0
 
 
 class SerpApiError(RuntimeError):
@@ -82,7 +85,7 @@ def call_serpapi(engine: str, params: Mapping[str, Any]) -> dict[str, Any] | str
             headers={
                 "Accept": "text/markdown" if output == "md" else "application/json",
             },
-            timeout=TIMEOUT_SECONDS,
+            timeout=EXTRACT_TIMEOUT_SECONDS if engine == "extract" else TIMEOUT_SECONDS,
         )
         response.raise_for_status()
     except httpx.HTTPStatusError as exc:
@@ -109,6 +112,9 @@ def call_serpapi(engine: str, params: Mapping[str, Any]) -> dict[str, Any] | str
         markdown = response.text.replace(api_key, "[redacted]").strip()
         if not markdown:
             raise SerpApiError("SerpApi returned an empty Markdown response")
+        error = response_error(markdown) if engine != "extract" else None
+        if error:
+            raise SerpApiError(_safe_api_error(error, api_key))
         return markdown
 
     try:

@@ -1,9 +1,10 @@
-"""SerpApi web, Maps, News, Shopping, Hotels, Flights, and Travel Explore for Hermes Agent."""
+"""SerpApi search and page extraction for Hermes Agent."""
 
 from __future__ import annotations
 
 from .provider import SerpApiWebSearchProvider
 from .schemas import (
+    EXTRACT_SCHEMA,
     FLIGHTS_SEARCH_SCHEMA,
     HOTELS_SEARCH_SCHEMA,
     MAPS_SEARCH_SCHEMA,
@@ -12,6 +13,7 @@ from .schemas import (
     TRAVEL_EXPLORE_SEARCH_SCHEMA,
 )
 from .tools import (
+    extract,
     flights_search,
     hotels_search,
     maps_search,
@@ -24,7 +26,7 @@ __all__ = ["SerpApiWebSearchProvider", "register"]
 
 
 def register(ctx) -> None:
-    """Register SerpApi's web provider and specialized search tools."""
+    """Register SerpApi's web provider and direct tools."""
     provider = SerpApiWebSearchProvider()
     ctx.register_web_search_provider(provider)
 
@@ -35,6 +37,7 @@ def register(ctx) -> None:
         (HOTELS_SEARCH_SCHEMA, hotels_search),
         (FLIGHTS_SEARCH_SCHEMA, flights_search),
         (TRAVEL_EXPLORE_SEARCH_SCHEMA, travel_explore_search),
+        (EXTRACT_SCHEMA, extract),
     ):
         ctx.register_tool(
             name=schema["name"],

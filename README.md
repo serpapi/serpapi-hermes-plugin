@@ -1,130 +1,234 @@
 # SerpApi for Hermes Agent
 
 [![PyPI version](https://img.shields.io/pypi/v/serpapi-hermes-plugin.svg)](https://pypi.org/project/serpapi-hermes-plugin/)
-[![CI](https://github.com/serpapi/serpapi-hermes-plugin/actions/workflows/ci.yml/badge.svg)](https://github.com/serpapi/serpapi-hermes-plugin/actions/workflows/ci.yml)
-[![Python versions](https://img.shields.io/pypi/pyversions/serpapi-hermes-plugin.svg)](https://pypi.org/project/serpapi-hermes-plugin/)
 [![License: MIT](https://img.shields.io/pypi/l/serpapi-hermes-plugin.svg)](https://github.com/serpapi/serpapi-hermes-plugin/blob/main/LICENSE)
 
-Use [SerpApi](https://serpapi.com/) in [Hermes Agent](https://hermes-agent.nousresearch.com/) for web search, Maps, News, Shopping, Hotels, Flights, Travel Explore, and page extraction.
+Give [Hermes Agent](https://hermes-agent.nousresearch.com/) live search results from [SerpApi](https://serpapi.com/). With this plugin, Hermes searches the web, Google Maps, News, Shopping, Hotels, and Flights. It also reads, maps, and crawls web pages.
 
-Queries and requested URLs are sent to SerpApi using your API key. SerpApi fetches the requested pages; the plugin adds no telemetry.
-
-The plugin provides:
-
-- Hermes's built-in `web_search` uses the fast Google Light engine.
-- Dedicated Maps, News, Shopping, Hotels, Flights, and Travel Explore tools let Hermes choose the right SerpApi engine. They return Markdown by default, with JSON available.
-- `web_extract` reads page content through SerpApi. `serpapi_extract` adds scraping, URL mapping, and crawling, with compact content or full JSON through `compact_mode: false`.
-
-## Ask Hermes to install it
-
-You can let Hermes install and configure the plugin for you. Paste the message below into a Hermes chat, then approve the install or terminal commands if Hermes prompts you:
-
-```text
-Install and configure the SerpApi plugin from its official GitHub repository:
-
-hermes plugins install serpapi/serpapi-hermes-plugin --enable
-
-Request my approval for install or terminal commands whenever required; do not
-bypass approvals. Follow Hermes's prompts to install Python dependencies and
-enable the plugin named serpapi.
-
-If Hermes asks whether to allow this plugin to replace built-in tools, answer
-no; serpapi-hermes-plugin does not need tool-override access.
-
-Use my existing SERPAPI_API_KEY if configured. Otherwise, ask me for my SerpApi
-Private API Key when installation or setup requests it. I can copy it from
-https://serpapi.com/dashboard. Save it through Hermes's configuration in
-~/.hermes/.env without printing, logging, or committing it.
-
-Configure SerpApi as the Hermes web search and extract backend, tell me whether Hermes must be restarted, and verify that web search, page extraction, Maps, News, Shopping, Hotels, Flights, and Travel Explore tools are available. Use this key for future SerpApi requests and never expose it in output.
-```
-
-## Install
-
-You need [Hermes Agent](https://hermes-agent.nousresearch.com/docs/getting-started/quickstart/) 0.21.6 or later and a SerpApi account. Choose one installation method below. Both register the plugin as `serpapi` and provide the same search and extraction tools.
-
-### From GitHub (recommended)
-
-Use Hermes's [plugin installer](https://hermes-agent.nousresearch.com/docs/user-guide/features/plugins/#managing-plugins):
+Install it from the [Hermes Marketplace](https://hermes-agent.nousresearch.com/marketplace/serpapi):
 
 ```bash
-hermes plugins install serpapi/serpapi-hermes-plugin --enable
+hermes plugins install serpapi
 ```
 
-Follow the prompts for Python dependencies, enablement, and your SerpApi API key. Use a current Hermes version with [plugin dependency management](https://hermes-agent.nousresearch.com/docs/developer-guide/plugins#python-dependencies); older installers may clone the plugin without installing its dependencies.
+Or ask Hermes in the desktop app:
 
-To update a Git installation later:
+```text
+Install the serpapi plugin
+```
+
+In a terminal, Hermes asks for your SerpApi API key if it has none saved, hides it as you type, and saves it for you. In the desktop app, enter the key on the install card under **Advanced**. [Sign up for free](https://serpapi.com/users/sign_up) to get one.
+
+## Set up
+
+1. Get your API key. [Create a SerpApi account](https://serpapi.com/users/sign_up) or sign in, then copy the key from [serpapi.com/manage-api-key](https://serpapi.com/manage-api-key).
+
+2. Install the plugin:
+
+   ```bash
+   hermes plugins install serpapi
+   ```
+
+   Hermes asks for your API key if it has none saved. Paste it. Hermes hides the key as you type and saves it to your profile's `.env` file. Then accept the prompts to enable the plugin and install its dependencies.
+
+3. Make SerpApi your web search provider:
+
+   ```bash
+   hermes config set web.search_backend serpapi
+   hermes config set web.extract_backend serpapi
+   ```
+
+   You can also pick **SerpApi** in the `hermes tools` menu, under **Web Search & Extract**.
+
+4. Start a new Hermes session. If you run the Hermes gateway, restart it with `hermes gateway restart`.
+
+## Try it
+
+Ask in plain language and Hermes picks the right search.
+
+- "Search the web for the Python 3.15 release notes."
+- "Find top-rated coffee shops near Times Square."
+- "Show me recent news about reusable rockets."
+- "Find laptops under $1,200 with free shipping."
+- "Find four-star hotels in Kyoto for five nights next month."
+- "Compare nonstop business-class flights from JFK to LAX next month."
+- "Where can I go from Bengaluru for a one-week beach trip in December?"
+- "Read https://www.python.org/about/ and summarize it."
+- "Map docs.python.org and list the pages about asyncio."
+
+## What Hermes can do
+
+| You ask for | Hermes uses | SerpApi API |
+|---|---|---|
+| Web results | `web_search` | [Google Light Search API](https://serpapi.com/google-light-api) |
+| The content of a page | `web_extract` | [Extract API](https://serpapi.com/extract-api) |
+| A page, a site's URLs, or a crawl | `serpapi_extract` | [Extract API](https://serpapi.com/extract-api) |
+| Places and local businesses | `serpapi_maps_search` | [Google Maps API](https://serpapi.com/google-maps-api) |
+| Current and recent news | `serpapi_news_search` | [Google News Light API](https://serpapi.com/google-news-light-api) |
+| Products, prices, and merchants | `serpapi_shopping_search` | [Google Shopping Light API](https://serpapi.com/google-shopping-light-api) |
+| Hotels and vacation rentals | `serpapi_hotels_search` | [Google Hotels API](https://serpapi.com/google-hotels-api) |
+| Fares on a fixed route | `serpapi_flights_search` | [Google Flights API](https://serpapi.com/google-flights-api) |
+| Destinations for flexible dates | `serpapi_travel_explore_search` | [Google Travel Explore API](https://serpapi.com/google-travel-explore-api) |
+
+The first two rows are Hermes's own web tools, which use SerpApi once you finish step 3 of the setup. The other seven come with the plugin.
+
+One API key covers all of them. Searches and page reads use the search credits in your [SerpApi plan](https://serpapi.com/pricing). Cached results are free, and your [dashboard](https://serpapi.com/dashboard) shows your usage.
+
+## Page extraction
+
+Hermes can read the web in three ways:
+
+- Read one page. Ask Hermes to read or summarize a URL.
+- Map a website. Hermes gets a list of the site's pages.
+- Crawl a website. Hermes follows the site's links and reads each page on the way.
+
+Before you crawl a site:
+
+- A crawl uses one search credit for each page it extracts. It extracts up to 10 pages by default, and you can raise the limit to 100. Failed pages and cached responses are free.
+- A page that needs JavaScript to show its content can come back incomplete.
+- SerpApi respects each website's `robots.txt` and skips the pages a site blocks.
+- By default, Hermes refuses private and internal network addresses.
+
+The [Extract API documentation](https://serpapi.com/extract-api) has the details.
+
+## Your data
+
+- The plugin sends your search queries, their options (such as location, dates, and filters), and the URLs you ask Hermes to read to `https://serpapi.com/search`, together with your API key. It contacts no other service.
+- SerpApi's servers run each search and fetch each page, so the sites you read receive SerpApi's request. Before it reads a page, Hermes looks up the address from your machine and, by default, blocks private and internal ones.
+- Hermes saves your key as `SERPAPI_API_KEY` in your profile's `.env` file, which is `~/.hermes/.env` for the default profile. The plugin reads the key through Hermes and removes it from results and error messages before the model sees them.
+- The plugin collects no telemetry, runs no shell commands or background processes, and reads none of your files.
+
+SerpApi's [privacy policy and terms](https://serpapi.com/legal) cover the requests it receives.
+
+## Update or remove
+
+Get the latest version:
 
 ```bash
 hermes plugins update serpapi
 ```
 
-GitHub installs follow the repository; [catalog installs](https://hermes-agent.nousresearch.com/docs/plugins/serpapi) receive maintainer-reviewed releases through the same update command.
+Remove the plugin and reset your web search provider:
+
+```bash
+hermes plugins remove serpapi
+hermes config unset web.search_backend
+hermes config unset web.extract_backend
+```
+
+If you picked SerpApi in the `hermes tools` menu, the shared `web.backend` setting names it too. Check with `hermes config get web.backend`. If it says `serpapi`, choose another provider in the menu or run `hermes config unset web.backend`.
+
+Your API key stays in your profile's `.env` file until you delete that line.
+
+These commands manage Marketplace and GitHub installs. For a PyPI install, see "From PyPI" below.
+
+## Troubleshooting
+
+| You see | Do this |
+|---|---|
+| `SERPAPI_API_KEY is not set` | Run `hermes tools`, open **Web Search & Extract**, select **SerpApi**, and paste your key. You can also add `SERPAPI_API_KEY=your_private_api_key` to `~/.hermes/.env`. |
+| `SerpApi rejected the API key` | Copy the key again from [serpapi.com/manage-api-key](https://serpapi.com/manage-api-key) and replace the saved one. |
+| `SerpApi quota exhausted` | Your plan ran out of searches or hit its hourly limit. Check your [dashboard](https://serpapi.com/dashboard). |
+| Hermes has no SerpApi tools | Run `hermes plugins list`. If `serpapi` shows `not enabled`, run `hermes plugins enable serpapi`. Hermes hides the tools until it finds your API key. Start a new session after either fix. |
+| `web_search` uses another provider | Run the two `hermes config set` commands from step 3. They take priority over the `hermes tools` menu. |
+| `Blocked: URL targets a private, internal, or unresolved address` | By default, Hermes blocks private and internal addresses. Use a public `http` or `https` URL. |
+| The install asks for a newer Hermes | Run `hermes update`. The plugin needs Hermes Agent 0.21.6 or later. |
+| The plugin stays disabled after a scripted install | Add `--enable --yes-deps`, as shown under "Scripts, Docker, and CI". |
+| The plugin is missing in another profile | Hermes installs plugins per profile. Run `hermes -p <profile> plugins install serpapi`. |
+
+For other problems, [open an issue](https://github.com/serpapi/serpapi-hermes-plugin/issues).
+
+## Other ways to install
+
+The Marketplace command above covers most setups. These cover the rest.
+
+### Ask Hermes in the desktop app
+
+Name the plugin in a chat:
+
+```text
+Install the serpapi plugin
+```
+
+Hermes finds the plugin in the Marketplace and shows an install card. If Hermes has no API key saved, open **Advanced**, enter the key under **Credentials**, and click **Install** there. With a key saved, click **Install** on the card. Then make SerpApi your web search and extract provider, as in step 3 of the setup.
+
+You can also install without a chat. Open the [Marketplace page](https://hermes-agent.nousresearch.com/marketplace/serpapi) and click **Install in Hermes**, or find SerpApi under **Capabilities → Plugins** in the app. Each route installs the same version as the terminal command.
+
+### Ask Hermes in a terminal or messaging chat
+
+Hermes shows the install card in the desktop app. In a terminal or messaging chat, give Hermes the commands to run and approve them as it asks:
+
+```text
+Install the SerpApi plugin from the Hermes Marketplace and make it my web
+search and extract backend. Request my approval for terminal commands whenever
+Hermes requires it; do not bypass approvals.
+
+1. Check that SERPAPI_API_KEY is saved in my Hermes profile. Do not print it,
+   and do not ask me to paste it into this chat. If it is missing, stop and
+   tell me to run "hermes plugins install serpapi" in a terminal, where Hermes
+   asks for the key and hides it.
+2. If serpapi is not installed, run:
+   hermes plugins install serpapi --enable --yes-deps
+   If it is already installed, enable it with "hermes plugins enable serpapi"
+   instead of reinstalling it.
+3. Run: hermes config set web.search_backend serpapi
+4. Run: hermes config set web.extract_backend serpapi
+5. Run: hermes plugins list, and confirm that serpapi shows as enabled.
+
+Finish by telling me whether I need to restart Hermes.
+```
+
+### Scripts, Docker, and CI
+
+An unattended install has nobody to answer Hermes's prompts. Save your API key in your profile's `.env` file first, as shown under "Edit the config files". Then run:
+
+```bash
+hermes plugins install serpapi --enable --yes-deps
+hermes config set web.search_backend serpapi
+hermes config set web.extract_backend serpapi
+```
+
+With the key saved, Hermes skips the key prompt. `--yes-deps` approves the plugin's two Python dependencies, `httpx` and `markdown-it-py`.
+
+### From GitHub
+
+To try changes before they reach the Marketplace, install from this repository:
+
+```bash
+hermes plugins install serpapi/serpapi-hermes-plugin --enable
+```
+
+This installs the code on this repository's `main` branch, which may include changes not yet available in the Marketplace. Hermes shows a warning, because the Marketplace review hasn't covered that code. Update it with `hermes plugins update serpapi`.
 
 ### From PyPI
 
-For Hermes installations whose Python environment you manage yourself, install the published package into the interpreter that runs Hermes:
+Use PyPI if you run Hermes from a Python environment you manage yourself. Hermes's standard installer manages its own environment, and the Marketplace command is the right route there.
+
+Install the package into the interpreter that runs Hermes, then enable it:
 
 ```bash
 uv pip install --python /path/to/hermes/python serpapi-hermes-plugin
 hermes plugins enable serpapi
 ```
 
-If your Hermes installation uses `~/.hermes/hermes-agent/venv`, the install command is:
+Add your key to your profile's `.env` file as shown below, and finish step 3 of the setup.
+
+`hermes plugins update` and `hermes plugins remove` don't manage a PyPI install. Upgrade or uninstall the package with the same tool:
 
 ```bash
-uv pip install --python ~/.hermes/hermes-agent/venv/bin/python serpapi-hermes-plugin
+uv pip install --python /path/to/hermes/python --upgrade serpapi-hermes-plugin
+uv pip uninstall --python /path/to/hermes/python serpapi-hermes-plugin
 ```
 
-The explicit [`--python`](https://docs.astral.sh/uv/pip/environments/#using-arbitrary-python-environments) selects Hermes's environment without activating it. If that environment already has pip and is activated, `python -m pip install serpapi-hermes-plugin` is equivalent. Use the GitHub option for current Hermes-managed installations, as described in Hermes's [pip distribution guidance](https://hermes-agent.nousresearch.com/docs/developer-guide/plugins#distribute-via-pip).
+### Edit the config files
 
-Restart any running Hermes session after installation.
-
-## Get your SerpApi API key
-
-1. [Create a SerpApi account](https://serpapi.com/users/sign_up), or sign in to
-   your existing account.
-2. Open the [SerpApi dashboard](https://serpapi.com/dashboard).
-3. Find your **Private API Key** in the dashboard and copy it.
-
-One API key powers every engine in this plugin. Keep it private and never add it
-to source control.
-
-## Connect the API key to Hermes
-
-If the plugin is not enabled yet, enable it:
-
-```bash
-hermes plugins enable serpapi
-```
-
-If prompted about permission to replace built-in tools, answer **no**. This
-plugin adds new tools and a web-search provider; it does not replace built-in
-tool handlers.
-
-Open Hermes's interactive tool configuration:
-
-```bash
-hermes tools
-```
-
-In the **Web Search & Extract** section:
-
-1. Select **SerpApi**.
-2. Paste the Private API Key copied from your SerpApi dashboard.
-3. Confirm the selection.
-
-Hermes saves the key as `SERPAPI_API_KEY` in its environment configuration and selects SerpApi for future `web_search` calls. Also select SerpApi as the extract backend, or set `web.extract_backend: serpapi` as shown below. Restart Hermes if a session was already running.
-
-## Manual API-key setup
-
-Instead of using `hermes tools`, add the key to `~/.hermes/.env`:
+Add the key to your profile's `.env` file. For the default profile, that is `~/.hermes/.env`:
 
 ```dotenv
 SERPAPI_API_KEY=your_private_api_key
 ```
 
-Then configure `~/.hermes/config.yaml`:
+Then enable the plugin and select the backends in your profile's `config.yaml`, which is `~/.hermes/config.yaml` for the default profile. Merge these settings into any existing configuration:
 
 ```yaml
 plugins:
@@ -136,54 +240,15 @@ web:
   extract_backend: serpapi
 ```
 
-You may also export `SERPAPI_API_KEY` in the environment that starts Hermes.
-The environment variable takes precedence over the value in `~/.hermes/.env`.
+## Learn more
 
-## Search and extraction capabilities
-
-Ask Hermes what you need; it chooses the tool and supplies the parameters. Direct search tools return Markdown by default and support JSON when structured data is needed.
-
-| What you ask for | Hermes tool | SerpApi engine |
-|---|---|---|
-| General web research | `web_search` | `google_light` |
-| Read page content | `web_extract` | [`extract`](https://serpapi.com/extract-api) |
-| Scrape pages, map URLs, or crawl a site | `serpapi_extract` | `extract` |
-| Places and local businesses | `serpapi_maps_search` | `google_maps` |
-| Current and recent news | `serpapi_news_search` | `google_news_light` |
-| Products, prices, and merchants | `serpapi_shopping_search` | `google_shopping_light` |
-| Hotels and vacation rentals | `serpapi_hotels_search` | [`google_hotels`](https://serpapi.com/google-hotels-api) |
-| Fixed-route flight fares | `serpapi_flights_search` | [`google_flights`](https://serpapi.com/google-flights-api) |
-| Flexible destinations and dates | `serpapi_travel_explore_search` | [`google_travel_explore`](https://serpapi.com/google-travel-explore-api) |
-
-Example prompts:
-
-- "Search the web for the latest Python 3.15 release notes."
-- "Read https://www.python.org/about/ and summarize it."
-- "Extract the product details and prices from this page."
-- "Map this website and read the three pages most relevant to my question."
-- "Find highly rated coffee shops near Times Square."
-- "Show me recent news about reusable rockets."
-- "Find well-reviewed laptops under $1,200 with free shipping."
-- "Find four-star hotels in Kyoto for a five-night stay next month."
-- "Compare nonstop business-class flights from JFK to LAX next month."
-- "Where can I go from Bengaluru for a one-week beach trip in December?"
-
-## Page extraction
-
-With `web.extract_backend: serpapi`, Hermes uses SerpApi to read pages. The `serpapi_extract` tool also lets the agent choose between:
-
-- `scrape`: Read one page (default).
-- `map`: Discover a website's URLs.
-- `crawl`: Follow links and read multiple pages.
-
-Results are compact by default, with full JSON available through `compact_mode: false`. Search URLs return results from their dedicated engines. The agent can limit crawl size and depth, include sitemaps or subdomains, and filter page elements.
-
-Pages are fetched without running JavaScript. Crawling uses one search credit per successfully extracted page. See the [Extract API documentation](https://serpapi.com/extract-api) for details.
+- [Introducing SerpApi's Hermes Agent Plugin](https://serpapi.com/blog/introducing-serpapis-hermes-agent-plugin/)
+- [How to Give Hermes Agent Real-Time Web Search Results](https://serpapi.com/blog/how-to-give-hermes-agent-real-time-web-search-results/)
+- [Web Search & Extract in the Hermes docs](https://hermes-agent.nousresearch.com/docs/user-guide/features/web-search)
 
 ## Contributing
 
-See [CONTRIBUTING.md](https://github.com/serpapi/serpapi-hermes-plugin/blob/main/CONTRIBUTING.md)
-for development setup, tests, pull request guidelines, and the release process.
+See [CONTRIBUTING.md](https://github.com/serpapi/serpapi-hermes-plugin/blob/main/CONTRIBUTING.md) for development setup, tests, and the release process.
 
 ## License
 
